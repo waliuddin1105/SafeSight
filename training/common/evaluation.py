@@ -86,6 +86,7 @@ def replay(cached: list[dict], slug: str, config: dict, thresholds: dict[str, fl
         for name in categories
     }
     per_group: dict[str, dict] = {}
+    failures = []
     duration = 0.0
     for item in cached:
         engine = Engine(
@@ -126,6 +127,15 @@ def replay(cached: list[dict], slug: str, config: dict, thresholds: dict[str, fl
                     used.add(index)
                     delays.append(max(0.0, first_emitted[alert.event_id] - truths[index]["start"]))
                     matched_hidden += int(truths[index].get("hidden_cigarette", False))
+                elif item.get("video") and len(failures) < 100:
+                    failures.append(
+                        {"video": item["video"], "timestamp": alert.start, "subtype": name, "kind": "false_positive"}
+                    )
+            for index, truth in enumerate(truths):
+                if index not in used and item.get("video") and len(failures) < 100:
+                    failures.append(
+                        {"video": item["video"], "timestamp": truth["start"], "subtype": name, "kind": "false_negative"}
+                    )
             tp, fp, fn = len(used), len(predictions) - len(used), len(truths) - len(used)
             row = counts[name]
             for key, value in (
@@ -160,7 +170,13 @@ def replay(cached: list[dict], slug: str, config: dict, thresholds: dict[str, fl
                     recall_samples.append(tp / (tp + fn))
         row["precision_ci95"] = np.quantile(precision_samples, [0.025, 0.975]).tolist() if precision_samples else None
         row["recall_ci95"] = np.quantile(recall_samples, [0.025, 0.975]).tolist() if recall_samples else None
-    return {"categories": counts, "groups": len(per_group), "video_hours": duration / 3600, "per_group": per_group}
+    return {
+        "categories": counts,
+        "groups": len(per_group),
+        "video_hours": duration / 3600,
+        "per_group": per_group,
+        "failure_examples": failures,
+    }
 
 
 def calibrate(

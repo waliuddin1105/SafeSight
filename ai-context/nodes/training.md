@@ -3,6 +3,7 @@ id: training
 type: pipeline
 status: implemented
 links:
+- adr-0009
 - adr-0008
 - adr-0006
 - adr-0005
@@ -28,3 +29,5 @@ Before validation, materialize_splits creates or verifies fingerprinted source-g
 Recipes are colocated at training/<slug>/config.yaml; old configs/training paths were removed.
 
 Image training and frozen qualification are separate commands; see docs/IMPROVEMENTS.md and ADR 0008.
+
+Validation-only comparison and measured failure galleries are implemented; see ADR 0009.

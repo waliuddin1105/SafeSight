@@ -49,3 +49,14 @@ def test_disk_features_and_exact_accumulation_weights(tmp_path):
     assert torch.equal(dataset[0][0], sample[0])
     # Batches 4,4,4,2 with accumulation=3: first update uses 12, last uses 2.
     assert [accumulation_weight(i, 4, 4, 14, 3) for i in range(4)] == [1 / 3, 1 / 3, 1 / 3, 1.0]
+
+
+def test_failure_gallery_uses_measured_examples(tmp_path):
+    from training.common.reports import failure_gallery, dataset_inventory
+    root = generate("phone_usage")
+    inventory = dataset_inventory(root, "phone_usage")
+    assert inventory["class_instances"]["phone"] > 0
+    output = tmp_path / "gallery"
+    failure_gallery(root, output, [{"video": "videos/test/evaluation_0.mp4", "timestamp": 0, "subtype": "phone_usage", "kind": "false_negative"}])
+    assert (output / "failure_0.jpg").exists()
+    assert "false_negative" in (output / "index.html").read_text()

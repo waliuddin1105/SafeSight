@@ -97,6 +97,17 @@
       "path": "decisions/0008-image-training-and-qualification.md"
     },
     {
+      "id": "adr-0009",
+      "type": "decision",
+      "status": "accepted",
+      "links": [
+        "training",
+        "detection_metrics",
+        "quality"
+      ],
+      "path": "decisions/0009-quality-diagnostics.md"
+    },
+    {
       "id": "index",
       "type": "index",
       "status": "implemented",
@@ -333,6 +344,7 @@
       "type": "component",
       "status": "implemented",
       "links": [
+        "adr-0009",
         "training",
         "architecture"
       ],
@@ -416,6 +428,7 @@
       "type": "component",
       "status": "implemented",
       "links": [
+        "adr-0009",
         "adr-0008",
         "architecture"
       ],
@@ -468,6 +481,7 @@
       "type": "pipeline",
       "status": "implemented",
       "links": [
+        "adr-0009",
         "adr-0008",
         "adr-0006",
         "adr-0005",
@@ -622,6 +636,18 @@
     {
       "from": "adr-0008",
       "to": "verification"
+    },
+    {
+      "from": "adr-0009",
+      "to": "training"
+    },
+    {
+      "from": "adr-0009",
+      "to": "detection_metrics"
+    },
+    {
+      "from": "adr-0009",
+      "to": "quality"
     },
     {
       "from": "index",
@@ -945,6 +971,10 @@
     },
     {
       "from": "detection_metrics",
+      "to": "adr-0009"
+    },
+    {
+      "from": "detection_metrics",
       "to": "training"
     },
     {
@@ -1021,6 +1051,10 @@
     },
     {
       "from": "quality",
+      "to": "adr-0009"
+    },
+    {
+      "from": "quality",
       "to": "adr-0008"
     },
     {
@@ -1066,6 +1100,10 @@
     {
       "from": "schema",
       "to": "quality"
+    },
+    {
+      "from": "training",
+      "to": "adr-0009"
     },
     {
       "from": "training",

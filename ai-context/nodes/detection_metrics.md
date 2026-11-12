@@ -2,7 +2,7 @@
 id: detection_metrics
 type: component
 status: implemented
-links: [training, architecture]
+links: [adr-0009, training, architecture]
 ---
 # Detection Metrics
 
@@ -17,3 +17,5 @@ Follow the linked component for the concrete data contract and source entrypoint
 ## Gotchas
 
 Untrained fixtures exercise software contracts; field performance requires measured held-out data.
+
+Validation-only comparison and measured failure galleries are implemented; see ADR 0009.

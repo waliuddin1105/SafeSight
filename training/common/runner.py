@@ -34,6 +34,7 @@ from training.common.evaluation import cache_predictions, calibrate, quality_gat
 from training.common.fixtures import generate
 from training.common.detection_metrics import evaluate_sizes
 from training.common.provenance import source_identity
+from training.common.reports import dataset_inventory, failure_gallery
 from training.common.networks import BodyMLP, EntranceLSTM
 from training.common.features import FeatureDataset, FeatureWriter, feature_cache, accumulation_weight
 
@@ -187,6 +188,7 @@ def fit_yolo(config: dict, dataset: Path, run: Path, device: str, resume: Path |
                     hsv_v=0.2,
                 )
             best = Path(model.trainer.best)
+            config["effective_batch_size"] = batch
             return best, YOLO(str(best))
         except torch.cuda.OutOfMemoryError:
             if batch == 1:
@@ -230,9 +232,11 @@ def classifier_data(config: dict, dataset: Path, run: Path, network: nn.Module, 
     slug = config["slug"]
     directory, cached = feature_cache(config, dataset, network, run)
     if cached is not None:
+        write_json(run / "pose_failures.json", {"count": 0, "failures": [], "cached": True})
         return cached
     data = {split: FeatureWriter(directory, split) for split in ("train", "val", "test")}
     pose = None
+    pose_failures = []
     if slug == "body_state" and not config.get("smoke"):
         pose = PoseExtractor(fetch("pose_landmarker_lite.task", resolve_path(config["pretrained_root"])))
     try:
@@ -240,16 +244,24 @@ def classifier_data(config: dict, dataset: Path, run: Path, network: nn.Module, 
             annotation = json.loads((dataset / record["annotation"]).read_text())
             if slug == "body_state":
                 rgb = np.asarray(Image.open(dataset / record["path"]).convert("RGB"))
+                detected = pose.extract(rgb) if pose else []
                 for person in annotation["people"]:
                     if config.get("smoke"):
                         points = person["landmarks"]
                     else:
                         from safesight.inference.engine import iou
 
-                        detected = pose.extract(rgb)
                         match = max(detected, key=lambda p: iou(p.box, person["box"]), default=None)
                         if match is None or iou(match.box, person["box"]) < 0.1:
-                            raise ValueError(f"No reliable pose for {record['path']}; inspect visibility/annotations")
+                            pose_failures.append(
+                                {
+                                    "sample_id": record["sample_id"],
+                                    "path": record["path"],
+                                    "box": person["box"],
+                                    "reason": "No reliable pose association; inspect visibility/annotations",
+                                }
+                            )
+                            continue
                         points = match.keypoints
                     data[record["split"]].append(
                         (
@@ -291,17 +303,20 @@ def classifier_data(config: dict, dataset: Path, run: Path, network: nn.Module, 
     finally:
         if pose:
             pose.close()
+    write_json(run / "pose_failures.json", {"failures": pose_failures, "count": len(pose_failures)})
+    if pose_failures:
+        raise ValueError(f"{len(pose_failures)} pose examples failed; see {run / 'pose_failures.json'}")
     index = {split: writer.rows for split, writer in data.items()}
     write_json(directory / "index.json", index)
     result = {split: FeatureDataset(directory, rows) for split, rows in index.items()}
     return result
 
 
-def classification_metrics(model: nn.Module, data: Dataset, slug: str, device: str) -> dict:
+def classification_metrics(model: nn.Module, data: Dataset, slug: str, device: str, batch_size: int = 8) -> dict:
     model.eval()
     predictions, truth = [], []
     with torch.inference_mode():
-        for features, labels, lengths in DataLoader(data, batch_size=8):
+        for features, labels, lengths in DataLoader(data, batch_size=batch_size):
             scores = (
                 model(features.to(device))
                 if slug == "body_state"
@@ -356,7 +371,7 @@ def fit_classifier(
             )
     frequencies = torch.bincount(data["train"].labels, minlength=len(CLASSES[slug])).float()
     weights = frequencies.sum() / (len(frequencies) * frequencies.clamp(min=1))
-    criterion = nn.CrossEntropyLoss(weight=weights.to(device))
+    criterion = nn.CrossEntropyLoss(weight=weights.to(device), reduction="none")
     optimizer = torch.optim.AdamW(
         [p for p in network.parameters() if p.requires_grad], lr=config["lr"], weight_decay=config["weight_decay"]
     )
@@ -375,7 +390,7 @@ def fit_classifier(
         torch.set_rng_state(checkpoint["torch_rng"].cpu())
         if torch.cuda.is_available() and checkpoint.get("cuda_rng"):
             torch.cuda.set_rng_state_all(checkpoint["cuda_rng"])
-    batch = config["batch"]
+    batch = checkpoint.get("batch", config["batch"]) if resume else config["batch"]
     epoch = start
     while epoch < config["epochs"]:
         save_checkpoint(
@@ -406,7 +421,7 @@ def fit_classifier(
                     mask = torch.rand_like(features[:, :, 3]) < 0.03
                     features[:, :, 3][mask] = 0
                 scores = network(features) if slug == "body_state" else network.classify(features, lengths)
-                loss = criterion(scores, labels)
+                loss = criterion(scores, labels).mean()
                 if not torch.isfinite(loss):
                     raise ValueError("Non-finite training loss; inspect labels and features")
                 (loss * accumulation_weight(index, len(loader), batch, len(data["train"]), accumulation)).backward()
@@ -416,7 +431,7 @@ def fit_classifier(
                     optimizer.step()
                     optimizer.zero_grad()
             scheduler.step()
-            metrics = classification_metrics(network, data["val"], slug, device)
+            metrics = classification_metrics(network, data["val"], slug, device, batch)
             score = metrics["macro_f1"]
             if score > best:
                 best, stale, best_state = score, 0, copy.deepcopy(network.state_dict())
@@ -430,6 +445,7 @@ def fit_classifier(
                     "optimizer": optimizer.state_dict(),
                     "scheduler": scheduler.state_dict(),
                     "epoch": epoch,
+                    "batch": batch,
                     "best": best,
                     "stale": stale,
                     "best_state": best_state,
@@ -442,7 +458,10 @@ def fit_classifier(
             LOG.info("Epoch %d loss %.4f validation macro F1 %.4f", epoch, total / max(1, len(loader)), score)
             with (run / "epochs.jsonl").open("a", encoding="utf-8") as handle:
                 handle.write(
-                    json.dumps({"epoch": epoch, "loss": total / max(1, len(loader)), "val_macro_f1": score}) + "\n"
+                    json.dumps(
+                        {"epoch": epoch, "batch": batch, "loss": total / max(1, len(loader)), "val_macro_f1": score}
+                    )
+                    + "\n"
                 )
             if stale >= config["patience"]:
                 break
@@ -462,6 +481,7 @@ def fit_classifier(
             optimizer.zero_grad(set_to_none=True)
             torch.cuda.empty_cache()
             LOG.warning("Reducing batch to %d after GPU memory exhaustion", batch)
+    config["effective_batch_size"] = batch
     network.load_state_dict(best_state)
     network.eval()
     artifact = run / "best.ts"
@@ -525,6 +545,7 @@ def main(slug: str) -> int:
             print(f"Completed run already evaluated; reusing {run / 'report.json'}")
             return 0
     write_json(run / "run.json", metadata)
+    write_json(run / "dataset_inventory.json", dataset_inventory(dataset, slug))
     logging.basicConfig(
         level=logging.INFO,
         handlers=[logging.StreamHandler(), logging.FileHandler(run / "train.log", encoding="utf-8")],
@@ -589,7 +610,9 @@ def main(slug: str) -> int:
             "ap50": {CLASSES[slug][int(i)]: float(ap) for i, ap in zip(measured.box.ap_class_index, measured.box.ap50)},
         }
     else:
-        validation_metrics = classification_metrics(model, data["val"], slug, device)
+        validation_metrics = classification_metrics(
+            model, data["val"], slug, device, config.get("effective_batch_size", config["batch"])
+        )
     card.update(
         quality={"status": "FAIL", "reasons": ["Training complete; alert qualification has not been performed"]},
         metrics={"validation": validation_metrics},
@@ -605,6 +628,7 @@ def main(slug: str) -> int:
     }
     write_json(run / "report.json", report)
     write_json(version / "report.json", report)
+    write_json(version / "training_report.json", report)
     text = (
         f"# {slug} training report\n\nEvaluation only: qualification required.\n\n```json\n"
         + json.dumps(report, indent=2)
@@ -680,9 +704,13 @@ def qualify_version(slug: str, version: Path, dataset: Path, config: dict) -> in
                 model, dataset, CLASSES[slug], config["image_size"], device
             )
         else:
-            model_metrics = classification_metrics(model, data["test"], slug, device)
+            model_metrics = classification_metrics(
+                model, data["test"], slug, device, config.get("effective_batch_size", config["batch"])
+            )
         test_cache = cache_predictions(registry, slug, dataset, "test")
         event_metrics = replay(test_cache, slug, inference_config, thresholds)
+        model_metrics["evaluation_scope"] = "frozen_model_test_split"
+        event_metrics["evaluation_scope"] = "deployed_preprocessing_fusion_and_temporal_pipeline"
         quality = quality_gate(config, result, model_metrics, event_metrics, thresholds, validation_metrics)
         card.update(
             qualification_dataset_hash=result.dataset_hash,
@@ -702,6 +730,7 @@ def qualify_version(slug: str, version: Path, dataset: Path, config: dict) -> in
             "device": device,
             "dataset_hash": result.dataset_hash,
         }
+        failure_gallery(dataset, run / "failures", event_metrics.get("failure_examples", []))
         write_json(run / "report.json", report)
         write_json(version / "report.json", report)
         lines = (
