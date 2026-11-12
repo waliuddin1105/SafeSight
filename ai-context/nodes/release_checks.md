@@ -19,3 +19,5 @@ Follow the linked component for the concrete data contract and source entrypoint
 Untrained fixtures exercise software contracts; field performance requires measured held-out data.
 
 Hosted-DB Compose contract rejects DATABASE_URL overrides and no longer requires a bundled db service.
+
+tools/build_openapi.py --check verifies route/resource contract freshness. CI includes job/session/browser and container acceptance without invoking trainers.

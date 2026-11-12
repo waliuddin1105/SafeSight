@@ -1,4 +1,39 @@
 # M0-M7 verification record
+## Approved P1-P8 improvement verification
+
+2026-11-12: 72 Python tests pass (55 unit, 17 PostgreSQL integration). Four browser
+workflows pass: sign-in/filter/permission denial, capture reconnect, incident review,
+and a real fixture recording through the worker with selected-model playback/history.
+The original three and added recording workflow were verified across browser runs.
+TypeScript/Vite production build, Ruff, OpenAPI stale-contract check, release contracts
+and context graph pass. No train.py, optimizer step or model fitting was executed.
+
+Added checks cover image-only training readiness, duplicate-stem staging, disk-backed
+features, exact accumulation weighting, checkpoint/RNG restoration with inert state
+objects, failure galleries, pinned-card replacement, queued/running cancellation,
+shared atomic rate limits, concurrent refresh, disk-shortfall HTTP 507, lost ownership,
+annotation-backed event matching and bounded native input using a generated video.
+
+Local migration 0003 -> 0004 -> 0003 -> 0004 passes. Hosted Supabase is at 0004 and
+all application tables exist. The requested confirmed default admin was created with
+a generated password stored only in ignored artifacts/private/admin-credentials.json.
+Real Supabase login, forced refresh, admin permission, protected reads and logout pass;
+real browser login/logout also pass. No password, token or admin key was printed.
+
+Synthetic inference benchmark: Windows, AMD64 Family 23 Model 113 Stepping 0,
+12 logical CPUs, ~8.5 GB RAM, Python 3.11.14 and PyTorch 2.7.1+cpu. Ten blank 640x480
+frames with smaller untrained fixtures measured ~9.36 FPS average and ~0.280 seconds
+p95 per-frame latency. This excludes real camera conditions, cloud-DB pipeline cost
+and full entrance observation-window behavior. It is not model accuracy, target-GPU
+performance or production throughput evidence. Full JSON is artifacts/reports/benchmark.json.
+
+Docker is unavailable locally. CI now includes image build, Compose startup/restart
+and media-volume persistence, but remote CI has not been executed in this session.
+Real training, real-data accuracy/qualification, hardware cameras, GPU throughput and
+backup restoration remain unverified. Existing instruction against running trainers
+remains in force. Synthetic model cards remain FAIL/evaluation-only.
+
+
 ## Supabase database and authentication verification
 
 2026-11-12: 49 unit tests and nine PostgreSQL integration tests pass (58 total).

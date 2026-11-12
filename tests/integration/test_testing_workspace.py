@@ -15,12 +15,26 @@ from training.common.fixtures import generate
 from tools.build_openapi import build
 
 
-def submit(app, client, csrf):
+def submit(app, client, csrf, ground_truth=None):
     headers = {"X-CSRF-Token": csrf}
     location = client.post("/api/v1/locations", json={"name": "Video test room"}, headers=headers).json
-    source = client.post("/api/v1/sources", json={"name": "Recorded tests", "kind": "upload", "location_id": location["id"]}, headers=headers).json
+    source = client.post(
+        "/api/v1/sources",
+        json={"name": "Recorded tests", "kind": "upload", "location_id": location["id"]},
+        headers=headers,
+    ).json
     video = generate("phone_usage") / "videos/test/evaluation_0.mp4"
-    result = client.post("/api/v1/uploads", data={"source_id": source["id"], "models": json.dumps(["fire_smoke"]), "evaluation": "true", "file": (io.BytesIO(video.read_bytes()), "test.mp4")}, headers=headers)
+    result = client.post(
+        "/api/v1/uploads",
+        data={
+            "source_id": source["id"],
+            "models": json.dumps(["fire_smoke"]),
+            "evaluation": "true",
+            "file": (io.BytesIO(video.read_bytes()), "test.mp4"),
+            "ground_truth": json.dumps(ground_truth) if ground_truth is not None else "",
+        },
+        headers=headers,
+    )
     assert result.status_code == 202, result.json
     return result.json, headers
 
@@ -67,9 +81,11 @@ def test_pinned_job_survives_active_card_replacement_and_cancels_running(app):
 
 def test_shared_rate_limit_is_atomic(app):
     from safesight.backend.limits import login_limit
+
     def attempt(_):
         with app.app_context():
             return login_limit("synthetic-address")
+
     with ThreadPoolExecutor(max_workers=4) as executor:
         assert sum(executor.map(attempt, range(15))) == 10
 
@@ -80,10 +96,12 @@ def test_concurrent_refresh_rotates_once(app):
     cookie = client.get_cookie("session").value
     with app.extensions["db_sessions"].begin() as db:
         db.scalar(select(AuthSession)).token_expires_at = utcnow() - timedelta(seconds=1)
+
     def request(_):
         local = app.test_client()
         local.set_cookie("session", cookie)
         return local.get("/api/v1/incidents").status_code
+
     with ThreadPoolExecutor(max_workers=2) as executor:
         assert list(executor.map(request, range(2))) == [200, 200]
     assert app.extensions["supabase_auth"].refreshes == 1
@@ -104,19 +122,34 @@ def test_openapi_covers_routes_and_public_job_fields(app):
 
 def test_storage_shortfall_is_507_without_a_job(app, monkeypatch):
     from types import SimpleNamespace
+
     client = app.test_client()
     login = signin(client)
     headers = {"X-CSRF-Token": login.json["csrf_token"]}
     location = client.post("/api/v1/locations", json={"name": "Storage test"}, headers=headers).json
-    source = client.post("/api/v1/sources", json={"name": "Storage recording", "kind": "upload", "location_id": location["id"]}, headers=headers).json
+    source = client.post(
+        "/api/v1/sources",
+        json={"name": "Storage recording", "kind": "upload", "location_id": location["id"]},
+        headers=headers,
+    ).json
     monkeypatch.setattr("safesight.backend.routes.uploads.shutil.disk_usage", lambda _: SimpleNamespace(free=0))
-    response = client.post("/api/v1/uploads", data={"source_id": source["id"], "models": '["fire_smoke"]', "evaluation": "true", "file": (io.BytesIO(b"fixture"), "test.mp4")}, headers=headers)
+    response = client.post(
+        "/api/v1/uploads",
+        data={
+            "source_id": source["id"],
+            "models": '["fire_smoke"]',
+            "evaluation": "true",
+            "file": (io.BytesIO(b"fixture"), "test.mp4"),
+        },
+        headers=headers,
+    )
     assert response.status_code == 507
     assert client.get("/api/v1/jobs").json["total"] == 0
 
 
 def test_lost_worker_owner_connection_stops_processing(app):
     import pytest
+
     worker = Worker(app.extensions["safesight"])
     try:
         worker.owner_connection.close()
@@ -124,3 +157,35 @@ def test_lost_worker_owner_connection_stops_processing(app):
             worker.tick()
     finally:
         worker.close()
+
+
+def test_event_metrics_require_and_match_supplied_ground_truth(app, monkeypatch):
+    from safesight.contracts import Alert, Candidate
+
+    client = app.test_client()
+    login = signin(client)
+    truth = {"events": [{"slug": "fire_smoke", "subtype": "fire", "start": 0, "end": 1, "box": [0, 0, 1, 1]}]}
+    job, _ = submit(app, client, login.json["csrf_token"], truth)
+    assert not client.get(f"/api/v1/jobs/{job['id']}/metrics").json["available"]
+    monkeypatch.setattr(
+        "safesight.inference.engine.Engine.process",
+        lambda self, p, people, t: [
+            Alert(
+                Candidate("fire_smoke", "fire", "scene", 0.99, t, details={"box": [0, 0, 1, 1]}),
+                0,
+                max(0.4, t),
+                "fixture-event",
+            )
+        ],
+    )
+    worker = Worker(app.extensions["safesight"])
+    try:
+        for _ in range(20):
+            worker.tick_job()
+            if client.get(f"/api/v1/jobs/{job['id']}").json["state"] == "completed":
+                break
+    finally:
+        worker.close()
+    metrics = client.get(f"/api/v1/jobs/{job['id']}/metrics").json
+    assert metrics["available"] and metrics["true_positive"] == 1
+    assert metrics["false_positive"] == metrics["false_negative"] == 0

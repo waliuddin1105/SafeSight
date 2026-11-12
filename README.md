@@ -61,8 +61,9 @@ and readiness statuses. Current public sources still need annotation/provenance 
 download completion does not imply that the strict training dataset contract is met.
 
 Read datasets/SLUG/README.md before collecting data. Supply images/clips, annotations,
-manifest provenance and held-out event videos exactly as documented. Split original
-videos/scenes/sessions before extracting frames; never randomly split video frames.
+manifest provenance exactly as documented. Four use cases train on images; guard
+requires ordered clips. Event videos are needed only for separate alert qualification.
+Splits are generated automatically by original video/scene/session; never randomly split frames.
 The repository contains no real datasets. Training never writes to supplied datasets.
 
 ```powershell
@@ -85,11 +86,18 @@ completed reports are reused rather than silently evaluating test again. YOLO ch
 are under the run's fit/weights directory; classifier checkpoints are run/last.pt.
 
 Runs write artifacts/runs/SLUG/RUN_ID and models/SLUG/versions/RUN_ID, including reports
-and model cards. Exit 0 means a passing real-data run, exit 2 means a completed run that
-failed quality, and exit 1 means a structural/execution failure. In --smoke mode, exit 0
-means software execution succeeded; synthetic data always fails production qualification.
-No feasible validation threshold is recorded as 1.01 (disabled qualified alert), with a
-failure diagnosis. Unknown-source smoke has a separate explicit review threshold.
+and model cards. Training exit 0 means fitting/validation completed, not a production
+quality PASS. Structural/execution failures exit 1. Training never auto-activates a model.
+Qualify a frozen version after supplying annotated validation/test recordings:
+
+```powershell
+python tools/validate_dataset.py phone_usage --qualification
+python tools/qualify_model.py phone_usage RUN_ID
+```
+
+Qualification exits 0 for PASS, 2 for completed quality FAIL and 1 for execution/data
+errors. Only passing real-data qualification can activate a model. Synthetic artifacts
+remain evaluation-only. See [improvements and verification](docs/IMPROVEMENTS.md).
 
 Only passing real-data versions activate automatically. Select an existing candidate with:
 
@@ -224,3 +232,5 @@ cannot establish real quality, prevent retraining, or prove performance on unava
 Dataset partitioning is automatic: see [unsplit input workflow](docs/AUTOMATIC_SPLITS.md).
 
 Share trained weights using the [model bundle workflow](docs/MODEL_SHARING.md). Model binaries and datasets stay outside Git.
+
+Deployment diagnostics, default-admin access, cleanup and backup procedures: [operations](docs/OPERATIONS.md). The generated [OpenAPI contract](docs/openapi.json) documents the REST surface.

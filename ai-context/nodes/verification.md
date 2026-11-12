@@ -24,3 +24,5 @@ Do not confuse historical synthetic training reports with verification of the up
 Current result: 26 Python checks, TypeScript build, browser acceptance and source/release contracts pass. No train.py entrypoint was executed in the completion pass. Docker runtime remains unverified locally.
 
 Supabase identity/session tests use an explicit fake HTTP boundary against disposable PostgreSQL, not a production auth bypass. Remote connectivity and schema migration are checked separately; no real user password login is claimed.
+
+P1-P8 verification uses non-training state/fixture tests and PostgreSQL/browser integration. Real default-admin Supabase login/refresh/logout and browser login/logout pass. Benchmark and Docker limitations are explicit in docs/VERIFY.md.

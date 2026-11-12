@@ -177,3 +177,7 @@ ADR 0006 moves recipes beside train.py and selects shared-drive model bundles wi
 ## Approved update: Supabase database and authentication
 
 ADR 0007 supersedes local credentials and Compose PostgreSQL. Hosted PostgreSQL and Supabase email Auth use environment configuration. Cookie/CSRF protections and application role assignments remain; see SUPABASE.md.
+
+## Approved P1-P8 improvements
+
+Image training and frozen qualification are separate. Training reports, pinned video jobs, resilient worker ownership, typed dashboard, shared auth limits and operational diagnostics are implemented as described in IMPROVEMENTS.md. Docker/real-training limitations remain in VERIFY.md.

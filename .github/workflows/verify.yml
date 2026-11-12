@@ -17,6 +17,8 @@ jobs:
       SAFESIGHT_TEST_DATABASE_URL: postgresql+psycopg://safesight:ci-test-only@localhost:5432/safesight_test
       SECRET_KEY: ci-browser-check-only-session-key-123456789
       MODELS_ROOT: tests/fixtures/inference-models
+      SUPABASE_URL: https://auth.example.test
+      SUPABASE_PUBLISHABLE_KEY: sb_publishable_ci_fixture
       EVALUATION_MODE: 'true'
     steps:
       - uses: actions/checkout@v4
@@ -30,6 +32,7 @@ jobs:
       - run: python -m alembic upgrade head
       - run: python tools/generate_fixtures.py all
       - run: python -m pytest -q
+      - run: python tools/build_openapi.py --check
       - run: python tools/check_release.py
       - run: python -m ruff check safesight training tools
       - run: npm ci && npm run build
@@ -48,3 +51,14 @@ jobs:
           done
           npm --prefix frontend test
       - run: docker build -f docker/Dockerfile -t safesight:ci .
+      - name: Compose startup, restart and persistence
+        run: |
+          python tools/prepare_compose_ci.py
+          trap 'docker compose -f artifacts/compose-ci.yaml down -v' EXIT
+          docker compose -f artifacts/compose-ci.yaml up -d --wait --wait-timeout 180
+          curl --fail http://127.0.0.1:5000/api/v1/health/live
+          docker compose -f artifacts/compose-ci.yaml exec -T api python -c "from pathlib import Path; Path('/app/artifacts/media/persistence-check').write_text('persisted')"
+          docker compose -f artifacts/compose-ci.yaml restart api worker
+          sleep 10
+          curl --fail http://127.0.0.1:5000/api/v1/health/live
+          docker compose -f artifacts/compose-ci.yaml exec -T api python -c "from pathlib import Path; assert Path('/app/artifacts/media/persistence-check').read_text() == 'persisted'"

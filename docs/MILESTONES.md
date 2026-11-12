@@ -21,3 +21,10 @@ fails production qualification. It never calls a trainer or optimizer.
 Deployment readiness still requires Docker runtime checks on a Docker-capable host.
 Real safety performance, target GPU throughput and physical USB/RTSP behavior require
 the user's data/hardware. These are verification limits, not claimed measurements.
+
+## Approved improvement pass
+
+P1-P8 code is implemented; detailed behavior is in IMPROVEMENTS.md. Training remains
+intentionally unexecuted. Hosted Supabase migration 0004 and default-admin acceptance
+are verified. Current software checks, measured synthetic benchmark and Docker/GPU/
+real-data limitations are recorded in VERIFY.md. Operational procedures are in OPERATIONS.md.
