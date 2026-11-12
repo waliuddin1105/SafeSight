@@ -1,0 +1,43 @@
+{
+  "slug": "fire_smoke",
+  "dataset": "datasets/fire_smoke",
+  "output_root": "models",
+  "runs_root": "artifacts/runs",
+  "seed": 42,
+  "device": "auto",
+  "epochs": 100,
+  "patience": 20,
+  "batch": 4,
+  "effective_batch": 16,
+  "lr": 0.001,
+  "weight_decay": 0.0005,
+  "workers": 0,
+  "image_size": 640,
+  "architecture": "yolo11s",
+  "hidden_sizes": [
+    128,
+    64
+  ],
+  "dropout": 0.3,
+  "sequence_length": 100,
+  "sequence_fps": 5,
+  "window_seconds": 20,
+  "pretrained_root": "models/_pretrained",
+  "inference_config": "configs/inference.yaml",
+  "quality": {
+    "precision": 0.9,
+    "min_positive_events": 50,
+    "min_negative_videos": 50,
+    "min_groups": 5,
+    "ap50": {
+      "fire": 0.7,
+      "smoke": 0.7
+    },
+    "event_recall": 0.9
+  },
+  "split_ratios": [
+    0.7,
+    0.15,
+    0.15
+  ]
+}
