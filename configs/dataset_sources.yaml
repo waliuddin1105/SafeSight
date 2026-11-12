@@ -1,0 +1,59 @@
+schema_version: 1
+minimum_free_gb: 1
+maximum_extracted_gb: 30
+sources:
+  body_state:
+    id: polar-v1
+    title: POLAR posture-level action recognition
+    publisher: https://data.mendeley.com/datasets/hvnsh7rwz7/1
+    license: CC-BY-4.0 (original release); verify mirror content
+    kind: http
+    url: https://huggingface.co/datasets/sayantan47/POLAR-Posture-Level-Action-Recognition-Dataset/resolve/75011d205c4b4b64e38dd8c101354de5cb5b4ead/POLAR.zip
+    url_env: POLAR_ARCHIVE_URL
+    sha256: 62daf3a8c6adc2959deddba077500221e1a8607d5328862950dd8ea7737c03ab
+    estimated_archive_gb: 3.2
+    annotation_gaps:
+      - Review bending versus deep_bend and lying versus lying_on_floor; these are not equivalent labels.
+      - Supply verified person boxes, original scene/session provenance and held-out event videos.
+  phone_usage:
+    id: fpi-det
+    title: FPI-Det surveillance phone use
+    publisher: https://github.com/KvCgRv/FPI-Det
+    license: MIT according to the authors; retain original license and dataset terms
+    kind: http
+    url: https://drive.google.com/uc?export=download&id=1nObrvOSJfj2dzRcW9cGdV6yu6iurWcVo
+    url_env: FPI_DET_ARCHIVE_URL
+    estimated_archive_gb: 4
+    annotation_gaps:
+      - Head annotations are not person boxes; complete the approved person/phone taxonomy.
+      - The published download may require Google login; use an authorized archive or direct URL.
+      - Supply verified source-group provenance and held-out phone-use event videos.
+  cigarette_smoking:
+    id: visionwork-smoking-person-v3
+    title: Smoking_person version 3
+    publisher: https://universe.roboflow.com/visionwork/smoking_person
+    license: CC-BY-4.0 according to the publisher; retain export attribution
+    kind: roboflow
+    workspace: visionwork
+    project: smoking_person
+    version: 3
+    format: yolov8
+    url_env: SMOKING_ARCHIVE_URL
+    estimated_archive_gb: 2
+    annotation_gaps:
+      - The public class list has no lighter; complete all visible required object annotations.
+      - Verify unaugmented original-source grouping before splitting.
+      - Supply smoking/hidden-cigarette event footage and human-reviewed temporal annotations.
+  fire_smoke:
+    id: dfire-kaggle
+    title: D-Fire publisher-linked Kaggle export
+    publisher: https://github.com/gaia-solutions-on-demand/DFireDataset
+    license: CC0 collection; upstream image-provider terms still apply
+    kind: kaggle
+    dataset: sayedgamal99/smoke-fire-detection-yolo
+    url_env: DFIRE_ARCHIVE_URL
+    estimated_archive_gb: 5
+    annotation_gaps:
+      - The fire/smoke export has no person class; complete required person annotations.
+      - Audit original video/scene partitions and upstream image terms.
+      - Supply fire, hazardous-smoke, tobacco-smoke and negative event footage for evaluation.
