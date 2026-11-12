@@ -30,3 +30,5 @@ Login now accepts email/password through Supabase; protected media and API calls
 Jobs history/cancel/video/predictions/incidents/metrics and model-version listing are implemented. OpenAPI is generated and served at the authenticated /api/v1/openapi.json endpoint.
 
 OpenAPI now documents optional event ground truth and public job schemas; private session/credential tables remain excluded.
+
+The frontend API client handles empty/non-JSON proxy errors and HTTP no-content responses explicitly. Initial backend connection failures are shown on sign-in; login refreshes the CSRF token before retrying after server restart.

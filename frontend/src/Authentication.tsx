@@ -2,8 +2,8 @@ import { useState, type FormEvent } from "react";
 import { ShieldCheck, ArrowUpRight } from "lucide-react";
 import { api, setCsrf } from "./api";
 import type { AuthResponse, User } from "./types";
-export function Authentication({ onLogin }: { onLogin: (user: User) => void }) {
-  const [error, setError] = useState(""),
+export function Authentication({ onLogin, initialError = "" }: { onLogin: (user: User) => void; initialError?: string }) {
+  const [error, setError] = useState(initialError),
     [busy, setBusy] = useState(false);
   async function login(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -11,6 +11,8 @@ export function Authentication({ onLogin }: { onLogin: (user: User) => void }) {
     setError("");
     const form = new FormData(event.currentTarget);
     try {
+      const current = await api<AuthResponse>("/auth/me");
+      setCsrf(current.csrf_token);
       const result = await api<AuthResponse>("/auth/login", {
         method: "POST",
         body: JSON.stringify(Object.fromEntries(form)),

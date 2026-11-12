@@ -121,7 +121,7 @@ function App() {
         <p>Connecting to SafeSight?</p>
       </main>
     );
-  if (!user) return <Authentication onLogin={setUser} />;
+  if (!user) return <Authentication initialError={error} onLogin={(account) => { setError(""); setUser(account); }} />;
   return (
     <div className="shell">
       <aside>
