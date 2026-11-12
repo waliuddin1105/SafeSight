@@ -1,0 +1,50 @@
+name: M0-M7 checks (no training)
+on: [push, pull_request, workflow_dispatch]
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: safesight
+          POSTGRES_PASSWORD: ci-test-only
+          POSTGRES_DB: safesight_test
+        ports: ['5432:5432']
+        options: --health-cmd pg_isready --health-interval 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql+psycopg://safesight:ci-test-only@localhost:5432/safesight_test
+      SAFESIGHT_TEST_DATABASE_URL: postgresql+psycopg://safesight:ci-test-only@localhost:5432/safesight_test
+      SECRET_KEY: ci-browser-check-only-session-key-123456789
+      MODELS_ROOT: tests/fixtures/inference-models
+      EVALUATION_MODE: 'true'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - uses: actions/setup-node@v4
+        with: {node-version: '24'}
+      - run: python -m pip install -r requirements.txt -r requirements-dev.txt
+      - run: python -m pip check
+      - run: python tools/verify_environment.py
+      - run: python -m alembic upgrade head
+      - run: python tools/generate_fixtures.py all
+      - run: python -m pytest -q
+      - run: python tools/check_release.py
+      - run: python -m ruff check safesight training tools
+      - run: npm ci && npm run build
+        working-directory: frontend
+      - run: npx playwright install --with-deps chromium
+        working-directory: frontend
+      - name: Browser checks against disposable test application
+        run: |
+          mkdir -p artifacts
+          python -m safesight.backend > artifacts/ci-api.log 2>&1 &
+          safesight_api_pid=$!
+          trap 'kill "$safesight_api_pid"' EXIT
+          for attempt in {1..30}; do
+            if curl --fail --silent http://127.0.0.1:5000/api/v1/health/live; then break; fi
+            sleep 1
+          done
+          npm --prefix frontend test
+      - run: docker build -f docker/Dockerfile -t safesight:ci .
