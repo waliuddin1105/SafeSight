@@ -1,0 +1,14 @@
+sample_fps: 5
+max_gap_seconds: 1.0
+cooldown_seconds: 10
+tracking_iou: 0.25
+tracking_ttl_seconds: 2
+pose_asset: _pretrained/pose_landmarker_lite.task
+body_state:
+  n: 3
+  m: 5
+  durations: {deep_bend: 3.0, lying_on_floor: 1.0}
+phone_usage: {n: 3, m: 5}
+cigarette_smoking: {n: 3, m: 5, cue_memory_seconds: 4, crop_padding: 0.2}
+entrance_guard: {n: 1, m: 1, window_seconds: 20, fps: 5}
+fire_smoke: {n: 2, m: 3, growth_ratio: 1.25}

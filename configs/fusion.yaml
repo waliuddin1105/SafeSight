@@ -1,0 +1,13 @@
+dataset: datasets/fire_smoke
+validation_manifest: datasets/fire_smoke/events/fusion_val.jsonl
+test_manifest: datasets/fire_smoke/events/fusion_test.jsonl
+inference_config: configs/inference.yaml
+quality:
+  precision: 0.90
+  min_positive_events: 50
+  min_negative_videos: 50
+  min_predictions: 30
+  min_groups: 5
+  smoking_recall: 0.70
+  hazardous_smoke_recall: 0.90
+  fire_recall: 0.90
