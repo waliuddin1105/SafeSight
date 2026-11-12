@@ -3,6 +3,7 @@ id: training
 type: pipeline
 status: implemented
 links:
+- adr-0008
 - adr-0006
 - adr-0005
 - architecture
@@ -25,3 +26,5 @@ Calibration requires adequate validation support. Test is held out until all cho
 Before validation, materialize_splits creates or verifies fingerprinted source-group partitions. Seed/ratios and source provenance are explicit; originals are unchanged.
 
 Recipes are colocated at training/<slug>/config.yaml; old configs/training paths were removed.
+
+Image training and frozen qualification are separate commands; see docs/IMPROVEMENTS.md and ADR 0008.

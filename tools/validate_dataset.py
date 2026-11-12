@@ -18,7 +18,10 @@ def main() -> int:
     parser.add_argument("slug", choices=[*SLUGS, "all"])
     parser.add_argument("--root", help="Dataset root for one task; parent root for all")
     parser.add_argument("--allow-synthetic", action="store_true")
-    parser.add_argument("--seed", type=int, default=42, help="Match the training seed for automatic source-group splits")
+    parser.add_argument("--qualification", action="store_true", help="Also require temporal evaluation recordings")
+    parser.add_argument(
+        "--seed", type=int, default=42, help="Match the training seed for automatic source-group splits"
+    )
     args = parser.parse_args()
     slugs = SLUGS if args.slug == "all" else [args.slug]
     roots = {
@@ -33,7 +36,7 @@ def main() -> int:
     for slug, root in roots.items():
         root = materialize_splits(root, slug, args.seed)
         roots[slug] = root
-        result = validate(root, slug, args.allow_synthetic)
+        result = validate(root, slug, args.allow_synthetic, qualification=args.qualification)
         result.write(ROOT / "artifacts/reports/validation" / slug)
         print(f"{slug}: {'VALID' if result.valid else 'INVALID'}; {len(result.warnings)} warnings")
         for error in result.errors:

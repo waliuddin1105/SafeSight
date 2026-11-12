@@ -104,3 +104,5 @@ python training/entrance_guard/train.py --config training/entrance_guard/config.
 ```
 
 Validator/trainer never write here. Derived caches/crops/reports go to artifacts/. Synthetic fixtures only belong in tests/fixtures/.
+
+Image-based trainers do not require event videos. They remain evaluation-only until separate qualification; entrance_guard always requires ordered clips. See docs/IMPROVEMENTS.md.

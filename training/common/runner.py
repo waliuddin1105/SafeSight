@@ -20,7 +20,7 @@ import numpy as np
 from PIL import Image
 import torch
 from torch import nn
-from torch.utils.data import DataLoader, TensorDataset
+from torch.utils.data import DataLoader, Dataset
 from sklearn.metrics import classification_report, confusion_matrix, f1_score
 import yaml
 
@@ -35,6 +35,7 @@ from training.common.fixtures import generate
 from training.common.detection_metrics import evaluate_sizes
 from training.common.provenance import source_identity
 from training.common.networks import BodyMLP, EntranceLSTM
+from training.common.features import FeatureDataset, FeatureWriter, feature_cache, accumulation_weight
 
 LOG = logging.getLogger(__name__)
 
@@ -84,7 +85,7 @@ def stage_yolo(dataset: Path, destination: Path, slug: str) -> Path:
             else 1
         )
         for index in range(repeat):
-            name = f"{image.stem}_{index}"
+            name = hashlib.sha256((row["sample_id"] + row["path"]).encode()).hexdigest()[:24] + f"_{index}"
             image_target = destination / "images" / row["split"] / (name + image.suffix)
             label_target = destination / "labels" / row["split"] / (name + ".txt")
             image_target.parent.mkdir(parents=True, exist_ok=True)
@@ -113,7 +114,9 @@ def stage_yolo(dataset: Path, destination: Path, slug: str) -> Path:
                             crop_labels.append(
                                 f"{int(cid)} {(cx - left) / (right - left)} {(cy - top) / (bottom - top)} {cw / (right - left)} {ch / (bottom - top)}"
                             )
-                    crop_name = f"{image.stem}_crop_{index}"
+                    crop_name = (
+                        hashlib.sha256((row["sample_id"] + row["path"]).encode()).hexdigest()[:24] + f"_crop_{index}"
+                    )
                     opened.crop((int(left * w), int(top * h), int(right * w), int(bottom * h))).save(
                         destination / "images/train" / f"{crop_name}.jpg"
                     )
@@ -147,7 +150,7 @@ def fit_yolo(config: dict, dataset: Path, run: Path, device: str, resume: Path |
         try:
             model = YOLO(str(resume or weights))
             if resume:
-                model.train(resume=True, device=device)
+                model.train(resume=True, device=device, batch=batch)
             else:
                 model.train(
                     data=str(data),
@@ -188,6 +191,8 @@ def fit_yolo(config: dict, dataset: Path, run: Path, device: str, resume: Path |
         except torch.cuda.OutOfMemoryError:
             if batch == 1:
                 raise RuntimeError("GPU memory exhausted at batch 1; use device: cpu or a larger GPU")
+            last = run / "fit/weights/last.pt"
+            resume = last if last.exists() else resume
             batch = max(1, batch // 2)
             torch.cuda.empty_cache()
             seed_everything(config["seed"])
@@ -220,12 +225,13 @@ def make_encoder(config: dict) -> tuple[nn.Module, int]:
     raise ValueError("Entrance encoder must be mobilenet_v3_small or resnet18")
 
 
-def classifier_data(
-    config: dict, dataset: Path, run: Path, network: nn.Module, device: str
-) -> dict[str, TensorDataset]:
+def classifier_data(config: dict, dataset: Path, run: Path, network: nn.Module, device: str) -> dict[str, Dataset]:
     """Extract frozen representations; dataset files remain unmodified."""
     slug = config["slug"]
-    data: dict[str, list] = {split: [] for split in ("train", "val", "test")}
+    directory, cached = feature_cache(config, dataset, network, run)
+    if cached is not None:
+        return cached
+    data = {split: FeatureWriter(directory, split) for split in ("train", "val", "test")}
     pose = None
     if slug == "body_state" and not config.get("smoke"):
         pose = PoseExtractor(fetch("pose_landmarker_lite.task", resolve_path(config["pretrained_root"])))
@@ -285,14 +291,13 @@ def classifier_data(
     finally:
         if pose:
             pose.close()
-    result = {
-        split: TensorDataset(*(torch.stack([row[i] for row in rows]) for i in range(3))) for split, rows in data.items()
-    }
-    torch.save({split: item.tensors for split, item in result.items()}, run / "features.pt")
+    index = {split: writer.rows for split, writer in data.items()}
+    write_json(directory / "index.json", index)
+    result = {split: FeatureDataset(directory, rows) for split, rows in index.items()}
     return result
 
 
-def classification_metrics(model: nn.Module, data: TensorDataset, slug: str, device: str) -> dict:
+def classification_metrics(model: nn.Module, data: Dataset, slug: str, device: str) -> dict:
     model.eval()
     predictions, truth = [], []
     with torch.inference_mode():
@@ -331,13 +336,25 @@ def fit_classifier(
         else EntranceLSTM(*make_encoder(config), len(CLASSES[slug]), config["dropout"])
     )
     network.to(device)
+    before_features = (random.getstate(), np.random.get_state(), torch.get_rng_state())
     data = classifier_data(config, dataset, run, network, device)
+    random.setstate(before_features[0])
+    np.random.set_state(before_features[1])
+    torch.set_rng_state(before_features[2])
     if slug == "body_state":
         with torch.no_grad():
-            features = network.features(data["train"].tensors[0].to(device))
-            network.mean.copy_(features.mean(0))
-            network.scale.copy_(features.std(0).clamp(min=0.05))
-    frequencies = torch.bincount(data["train"].tensors[1], minlength=len(CLASSES[slug])).float()
+            total, square, count = None, None, 0
+            for points, _, _ in DataLoader(data["train"], batch_size=config["batch"]):
+                features = network.features(points.to(device))
+                total = features.sum(0) if total is None else total + features.sum(0)
+                square = features.square().sum(0) if square is None else square + features.square().sum(0)
+                count += len(features)
+            mean = total / count
+            network.mean.copy_(mean)
+            network.scale.copy_(
+                ((square - count * mean.square()) / max(1, count - 1)).clamp(min=0).sqrt().clamp(min=0.05)
+            )
+    frequencies = torch.bincount(data["train"].labels, minlength=len(CLASSES[slug])).float()
     weights = frequencies.sum() / (len(frequencies) * frequencies.clamp(min=1))
     criterion = nn.CrossEntropyLoss(weight=weights.to(device))
     optimizer = torch.optim.AdamW(
@@ -361,6 +378,18 @@ def fit_classifier(
     batch = config["batch"]
     epoch = start
     while epoch < config["epochs"]:
+        save_checkpoint(
+            run / "epoch-start.pt",
+            {
+                "model": network.state_dict(),
+                "optimizer": optimizer.state_dict(),
+                "scheduler": scheduler.state_dict(),
+                "python_rng": random.getstate(),
+                "numpy_rng": np.random.get_state(),
+                "torch_rng": torch.get_rng_state(),
+                "cuda_rng": torch.cuda.get_rng_state_all() if torch.cuda.is_available() else None,
+            },
+        )
         try:
             network.train()
             if slug == "entrance_guard":
@@ -380,7 +409,7 @@ def fit_classifier(
                 loss = criterion(scores, labels)
                 if not torch.isfinite(loss):
                     raise ValueError("Non-finite training loss; inspect labels and features")
-                (loss / accumulation).backward()
+                (loss * accumulation_weight(index, len(loader), batch, len(data["train"]), accumulation)).backward()
                 total += loss.item()
                 if (index + 1) % accumulation == 0 or index + 1 == len(loader):
                     nn.utils.clip_grad_norm_(network.parameters(), 1.0)
@@ -420,6 +449,15 @@ def fit_classifier(
         except torch.cuda.OutOfMemoryError:
             if batch == 1:
                 raise RuntimeError("Out of GPU memory at batch 1; configure device: cpu")
+            rollback = torch.load(run / "epoch-start.pt", map_location="cpu", weights_only=False)
+            network.load_state_dict(rollback["model"])
+            optimizer.load_state_dict(rollback["optimizer"])
+            scheduler.load_state_dict(rollback["scheduler"])
+            random.setstate(rollback["python_rng"])
+            np.random.set_state(rollback["numpy_rng"])
+            torch.set_rng_state(rollback["torch_rng"])
+            if rollback["cuda_rng"]:
+                torch.cuda.set_rng_state_all(rollback["cuda_rng"])
             batch = max(1, batch // 2)
             optimizer.zero_grad(set_to_none=True)
             torch.cuda.empty_cache()
@@ -462,7 +500,7 @@ def main(slug: str) -> int:
         config["seed"],
         tuple(config.get("split_ratios", [0.7, 0.15, 0.15])),
     )
-    result = validate(dataset, slug, args.smoke)
+    result = validate(dataset, slug, args.smoke, qualification=False)
     result.write(ROOT / "artifacts/reports/validation" / slug)
     if not result.valid:
         raise ValueError("Dataset invalid:\n" + "\n".join(result.errors))
@@ -485,9 +523,7 @@ def main(slug: str) -> int:
             raise ValueError("Resume rejected: dataset/config/architecture changed")
         if (run / "report.json").exists():
             print(f"Completed run already evaluated; reusing {run / 'report.json'}")
-            return (
-                0 if args.smoke or json.loads((run / "report.json").read_text())["quality"]["status"] == "PASS" else 2
-            )
+            return 0
     write_json(run / "run.json", metadata)
     logging.basicConfig(
         level=logging.INFO,
@@ -538,6 +574,65 @@ def main(slug: str) -> int:
     card["source_identity"] = source_identity()
     card["context_asset_sha256"] = sha256(pose_asset)
     write_json(version / "model_card.json", card)
+    write_json(version / "training_config.json", config)
+    if slug in YOLO_SLUGS:
+        measured = model.val(
+            data=str(run / "dataset-view/data.yaml"),
+            split="val",
+            imgsz=config["image_size"],
+            device=device,
+            plots=False,
+            verbose=False,
+        )
+        validation_metrics = {
+            "map50_95": float(measured.box.map),
+            "ap50": {CLASSES[slug][int(i)]: float(ap) for i, ap in zip(measured.box.ap_class_index, measured.box.ap50)},
+        }
+    else:
+        validation_metrics = classification_metrics(model, data["val"], slug, device)
+    card.update(
+        quality={"status": "FAIL", "reasons": ["Training complete; alert qualification has not been performed"]},
+        metrics={"validation": validation_metrics},
+        training_dataset_hash=result.dataset_hash,
+    )
+    write_json(version / "model_card.json", card)
+    report = {
+        "stage": "training",
+        "quality": card["quality"],
+        "validation": validation_metrics,
+        "dataset_hash": result.dataset_hash,
+        "synthetic": args.smoke,
+    }
+    write_json(run / "report.json", report)
+    write_json(version / "report.json", report)
+    text = (
+        f"# {slug} training report\n\nEvaluation only: qualification required.\n\n```json\n"
+        + json.dumps(report, indent=2)
+        + "\n```\n"
+    )
+    (version / "report.md").write_text(text, encoding="utf-8")
+    print(f"Training complete: {version}; model remains evaluation-only")
+    return 0
+
+
+def qualify_version(slug: str, version: Path, dataset: Path, config: dict) -> int:
+    """Evaluate a frozen version without fitting or changing its weights."""
+    card = json.loads((version / "model_card.json").read_text())
+    model_root = version.parents[2]
+    run = version / "qualification"
+    run.mkdir(exist_ok=True)
+    previous = run / "report.json"
+    if previous.exists():
+        print("Reusing completed qualification; test data is not replayed")
+        return 0 if json.loads(previous.read_text())["quality"]["status"] == "PASS" else 2
+    training = validate(dataset, slug, card["synthetic"], qualification=False)
+    if training.dataset_hash != card.get("training_dataset_hash", card["dataset_hash"]):
+        raise ValueError("Training samples differ from the frozen model; qualification rejected")
+    result = validate(dataset, slug, card["synthetic"], qualification=True)
+    result.write(run)
+    if not result.valid:
+        raise ValueError("Qualification dataset invalid: " + "; ".join(result.errors))
+    device = select_device(config["device"])
     registry = Registry(
         model_root,
         evaluation=True,
@@ -547,6 +642,11 @@ def main(slug: str) -> int:
     try:
         if slug not in registry.adapters:
             raise RuntimeError(registry.status[slug])
+        adapter = registry.adapters[slug]
+        model = adapter.model
+        data = classifier_data(config, dataset, run, model, device) if slug not in YOLO_SLUGS else None
+        if slug in YOLO_SLUGS:
+            stage_yolo(dataset, run / "dataset-view", slug)
         inference_config = read_yaml(config["inference_config"])
         val_cache = cache_predictions(registry, slug, dataset, "val")
         thresholds, curves = calibrate(
@@ -584,11 +684,15 @@ def main(slug: str) -> int:
         test_cache = cache_predictions(registry, slug, dataset, "test")
         event_metrics = replay(test_cache, slug, inference_config, thresholds)
         quality = quality_gate(config, result, model_metrics, event_metrics, thresholds, validation_metrics)
-        card.update(quality=quality, metrics={"model": model_metrics, "events": event_metrics})
+        card.update(
+            qualification_dataset_hash=result.dataset_hash,
+            quality=quality,
+            metrics={"model": model_metrics, "events": event_metrics},
+        )
         write_json(version / "model_card.json", card)
         report = {
             "slug": slug,
-            "synthetic": args.smoke,
+            "synthetic": card["synthetic"],
             "quality": quality,
             "model": model_metrics,
             "events": event_metrics,
@@ -604,7 +708,7 @@ def main(slug: str) -> int:
             [
                 f"# {slug} training report",
                 f"\nQuality: **{quality['status']}**",
-                f"\nSynthetic: {args.smoke}; device: {device}",
+                f"\nSynthetic: {card['synthetic']}; device: {device}",
                 "\n## Diagnosis",
             ]
             + [f"- {r}" for r in quality["reasons"]]
@@ -612,12 +716,12 @@ def main(slug: str) -> int:
         )
         (run / "report.md").write_text("\n".join(lines), encoding="utf-8")
         shutil.copyfile(run / "report.md", version / "report.md")
-        if quality["status"] == "PASS" or args.smoke:
+        if quality["status"] == "PASS" and not card["synthetic"]:
             write_json(model_root / slug / "model_card.json", card)
         print(f"{slug}: software execution completed; quality {quality['status']}; report {run / 'report.md'}")
         for reason in quality["reasons"]:
             print(f"  {reason}")
-        return 0 if args.smoke or quality["status"] == "PASS" else 2
+        return 0 if card["synthetic"] or quality["status"] == "PASS" else 2
     finally:
         registry.close()
 

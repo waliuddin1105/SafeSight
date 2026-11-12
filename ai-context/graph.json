@@ -85,6 +85,18 @@
       "path": "decisions/0007-supabase-database-and-auth.md"
     },
     {
+      "id": "adr-0008",
+      "type": "decision",
+      "status": "accepted",
+      "links": [
+        "training",
+        "datasets",
+        "quality",
+        "verification"
+      ],
+      "path": "decisions/0008-image-training-and-qualification.md"
+    },
+    {
       "id": "index",
       "type": "index",
       "status": "implemented",
@@ -286,6 +298,7 @@
       "type": "dataset",
       "status": "implemented",
       "links": [
+        "adr-0008",
         "adr-0005",
         "architecture",
         "quality",
@@ -403,6 +416,7 @@
       "type": "component",
       "status": "implemented",
       "links": [
+        "adr-0008",
         "architecture"
       ],
       "path": "nodes/quality.md"
@@ -454,6 +468,7 @@
       "type": "pipeline",
       "status": "implemented",
       "links": [
+        "adr-0008",
         "adr-0006",
         "adr-0005",
         "architecture",
@@ -590,6 +605,22 @@
     },
     {
       "from": "adr-0007",
+      "to": "verification"
+    },
+    {
+      "from": "adr-0008",
+      "to": "training"
+    },
+    {
+      "from": "adr-0008",
+      "to": "datasets"
+    },
+    {
+      "from": "adr-0008",
+      "to": "quality"
+    },
+    {
+      "from": "adr-0008",
       "to": "verification"
     },
     {
@@ -870,6 +901,10 @@
     },
     {
       "from": "datasets",
+      "to": "adr-0008"
+    },
+    {
+      "from": "datasets",
       "to": "adr-0005"
     },
     {
@@ -986,6 +1021,10 @@
     },
     {
       "from": "quality",
+      "to": "adr-0008"
+    },
+    {
+      "from": "quality",
       "to": "architecture"
     },
     {
@@ -1027,6 +1066,10 @@
     {
       "from": "schema",
       "to": "quality"
+    },
+    {
+      "from": "training",
+      "to": "adr-0008"
     },
     {
       "from": "training",

@@ -107,7 +107,7 @@ class Validation:
         (directory / "validation.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
-def validate(root: Path, slug: str, allow_synthetic: bool = False) -> Validation:
+def validate(root: Path, slug: str, allow_synthetic: bool = False, *, qualification: bool = True) -> Validation:
     """Validate a single independent dataset without creating or changing any file."""
     result = Validation(slug)
     classes = CLASSES[slug]
@@ -286,7 +286,7 @@ def validate(root: Path, slug: str, allow_synthetic: bool = False) -> Validation
             f"Review {len(result.leakage)} suspected cross-split near-duplicates; production gate cannot pass"
         )
 
-    if slug != "entrance_guard":
+    if qualification and slug != "entrance_guard":
         for split in ("val", "test"):
             try:
                 event_path = root / "events" / f"{split}.jsonl"

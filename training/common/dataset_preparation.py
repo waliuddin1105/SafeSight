@@ -273,7 +273,7 @@ def install_native(extracted: Path, target: Path, slug: str) -> dict | None:
     source = candidates[0]
     from training.common.splitting import materialize_splits
 
-    result = validate(materialize_splits(source, slug), slug)
+    result = validate(materialize_splits(source, slug), slug, qualification=False)
     if not result.valid:
         return {"status": "NEEDS_ANNOTATIONS", "errors": result.errors, "warnings": result.warnings}
     files = [p for p in source.rglob("*") if p.is_file() and p.name not in ("README.md", ".extracted.json")]
@@ -290,7 +290,7 @@ def install_native(extracted: Path, target: Path, slug: str) -> dict | None:
         if not output.exists():
             output.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(path, output)
-    installed = validate(materialize_splits(target, slug), slug)
+    installed = validate(materialize_splits(target, slug), slug, qualification=False)
     return {
         "status": "READY" if installed.valid else "NEEDS_ANNOTATIONS",
         "errors": installed.errors,
@@ -347,7 +347,7 @@ def prepare(
 
         from training.common.splitting import materialize_splits
 
-        existing = validate(materialize_splits(target, slug), slug)
+        existing = validate(materialize_splits(target, slug), slug, qualification=False)
         if existing.valid:
             return {
                 "slug": slug,

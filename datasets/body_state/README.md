@@ -110,3 +110,5 @@ python training/body_state/train.py --config training/body_state/config.yaml
 ```
 
 Validator/trainer never write here. Derived caches/crops/reports go to artifacts/. Synthetic fixtures only belong in tests/fixtures/.
+
+Image-based trainers do not require event videos. They remain evaluation-only until separate qualification; entrance_guard always requires ordered clips. See docs/IMPROVEMENTS.md.

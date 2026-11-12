@@ -158,7 +158,7 @@ def test_native_install_preserves_user_data(tmp_path, monkeypatch):
     target.mkdir()
     (target / "data.yaml").write_text("existing user dataset")
     result = SimpleNamespace(valid=True, errors=[], warnings=[], dataset_hash="fixture")
-    monkeypatch.setattr("training.common.datasets.validate", lambda *args: result)
+    monkeypatch.setattr("training.common.datasets.validate", lambda *args, **kwargs: result)
     with pytest.raises(ValueError, match="overwrite"):
         install_native(source, target, "phone_usage")
     assert (target / "data.yaml").read_text() == "existing user dataset"
@@ -215,7 +215,7 @@ def test_reviewed_native_bundle_installs_and_emits_config_without_training(tmp_p
         },
     )
     validation = SimpleNamespace(valid=True, errors=[], warnings=[], dataset_hash="component-fixture-hash")
-    monkeypatch.setattr("training.common.datasets.validate", lambda *args: validation)
+    monkeypatch.setattr("training.common.datasets.validate", lambda *args, **kwargs: validation)
     monkeypatch.setattr(
         "training.common.dataset_preparation.shutil.disk_usage", lambda _: SimpleNamespace(free=10 * 1024**3)
     )
