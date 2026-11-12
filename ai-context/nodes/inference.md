@@ -3,6 +3,7 @@ id: inference
 type: pipeline
 status: implemented
 links:
+- adr-0010
 - architecture
 - quality
 ---
@@ -19,3 +20,5 @@ Input: timestamped Prediction/Detection records. Output: deduplicated Alert reco
 ## Gotchas
 
 Small-object crop inference maps boxes back to the original frame. Strong fire is never suppressed; smoking-related suppression requires qualified joint context.
+
+Registry can load explicit pinned cards and reuse compatible global adapters/pose without duplicating weights. Full-frame/crop and temporal settings remain versioned.

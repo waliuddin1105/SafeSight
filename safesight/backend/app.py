@@ -27,6 +27,11 @@ def create_app(overrides: dict | None = None) -> Flask:
         "sb_publishable_"
     ):
         raise ValueError("Set SUPABASE_URL (HTTPS) and SUPABASE_PUBLISHABLE_KEY in .env")
+    if (
+        os.getenv("ENVIRONMENT", "development") == "production"
+        and os.getenv("SESSION_COOKIE_SECURE", "false").lower() != "true"
+    ):
+        raise ValueError("Production requires SESSION_COOKIE_SECURE=true and HTTPS")
     app = Flask(__name__, static_folder=None)
     app.config.update(
         SECRET_KEY=cfg["secret_key"],
@@ -40,7 +45,6 @@ def create_app(overrides: dict | None = None) -> Flask:
     app.extensions.update(safesight=cfg, db_engine=engine, db_sessions=sessions)
     media = Path(cfg["media_root"])
     media.mkdir(parents=True, exist_ok=True)
-    app.extensions["login_attempts"] = {}
 
     app.extensions["supabase_auth"] = SupabaseAuth(cfg["supabase_url"], cfg["supabase_publishable_key"])
     register_handlers(app)

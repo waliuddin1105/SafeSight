@@ -7,7 +7,7 @@ from uuid import UUID
 from flask import Blueprint, abort, current_app, jsonify, request, session
 from sqlalchemy import delete, select
 
-from safesight.backend.context import sessions, login_attempts
+from safesight.backend.context import sessions, cfg
 from safesight.backend.security import current_user
 from safesight.backend.serializers import serialize
 from safesight.backend.supabase_auth import AuthRejected, AuthUnavailable
@@ -20,7 +20,7 @@ bp = Blueprint("auth", __name__)
 @bp.get("/api/v1/auth/me")
 def me():
     user = current_user()
-    return jsonify(user=serialize(user) if user else None, csrf_token=session["csrf"])
+    return jsonify(user=serialize(user) if user else None, csrf_token=session["csrf"], timezone=cfg["timezone"])
 
 
 @bp.post("/api/v1/auth/login")
@@ -31,14 +31,10 @@ def login():
         abort(400, "Email and password are required")
     key = request.remote_addr or "local"
     now = utcnow()
-    # Bound memory and remove expired buckets without retaining raw credentials.
-    for address, (started, _) in list(login_attempts.items()):
-        if now - started > timedelta(minutes=5):
-            login_attempts.pop(address, None)
-    start, count = login_attempts.get(key, (now, 0))
-    if count >= 10 or len(login_attempts) >= 10000:
+    from safesight.backend.limits import login_limit
+
+    if not login_limit(key):
         abort(429, "Too many sign-in attempts; retry later")
-    login_attempts[key] = (start, count + 1)
     auth = current_app.extensions["supabase_auth"]
     try:
         tokens = auth.login(email.strip(), password)
@@ -75,15 +71,16 @@ def login():
         session.clear()
         session.update(auth_session=sid, user_id=user.id, csrf=secrets.token_urlsafe(32))
         session.permanent = True
-        login_attempts.pop(key, None)
-        return jsonify(user=serialize(user), csrf_token=session["csrf"])
+        return jsonify(user=serialize(user), csrf_token=session["csrf"], timezone=cfg["timezone"])
 
 
 @bp.post("/api/v1/auth/logout")
 def logout():
     # Local logout always works, including after expiry or a provider outage.
     with sessions.begin() as db:
-        stored = db.get(AuthSession, session.get("auth_session", ""))
+        stored = db.scalar(
+            select(AuthSession).where(AuthSession.id == session.get("auth_session", "")).with_for_update()
+        )
         if stored:
             try:
                 current_app.extensions["supabase_auth"].logout(stored.access_token)

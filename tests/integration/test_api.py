@@ -31,6 +31,7 @@ def app(tmp_path):
             "media_root": tmp_path / "media",
             "models_root": inference_fixtures(),
             "evaluation_mode": True,
+            "minimum_free_bytes": 0,
         }
     )
     app.extensions["supabase_auth"] = FakeAuth()
@@ -136,7 +137,7 @@ def test_uploaded_recording_runs_to_completion(app):
     video = generate("phone_usage") / "videos/test/evaluation_0.mp4"
     with video.open("rb") as handle:
         response = client.post(
-            "/api/v1/uploads", data={"source_id": source["id"], "file": (handle, "sample.mp4")}, headers=headers
+            "/api/v1/uploads", data={"source_id": source["id"], "file": (handle, "sample.mp4"), "evaluation": "true"}, headers=headers
         )
     assert response.status_code == 202
     worker = Worker(app.extensions["safesight"])

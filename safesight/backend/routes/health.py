@@ -57,3 +57,39 @@ def ready():
         return jsonify(
             status="ready" if healthy else "degraded", database=True, worker=bool(fresh), models=states
         ), 200 if healthy else 503
+
+
+@bp.get("/api/v1/models/versions")
+@authenticated
+def model_versions():
+    from safesight.model_loaders.registry import ModelCard
+    from safesight.config import within
+
+    items = []
+    for slug in SLUGS:
+        directory = within(cfg["models_root"], slug)
+        paths = list(directory.glob("versions/*/model_card.json"))
+        if (directory / "model_card.json").exists():
+            paths.append(directory / "model_card.json")
+        seen = set()
+        for path in paths:
+            try:
+                card = ModelCard.model_validate_json(path.read_text())
+                if card.run_id in seen or card.slug != slug:
+                    continue
+                seen.add(card.run_id)
+                items.append(
+                    {"slug": slug, "run_id": card.run_id, "quality": card.quality, "synthetic": card.synthetic}
+                )
+            except (ValueError, OSError):
+                continue
+    return jsonify(items=items)
+
+
+@bp.get("/api/v1/openapi.json")
+@authenticated
+def openapi_contract():
+    from flask import send_file
+    from safesight.config import ROOT
+
+    return send_file(ROOT / "docs/openapi.json", mimetype="application/json")

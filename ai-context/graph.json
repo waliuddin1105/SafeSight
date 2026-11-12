@@ -108,6 +108,21 @@
       "path": "decisions/0009-quality-diagnostics.md"
     },
     {
+      "id": "adr-0010",
+      "type": "decision",
+      "status": "accepted",
+      "links": [
+        "worker",
+        "capture",
+        "recovery",
+        "inference",
+        "schema",
+        "api",
+        "authentication"
+      ],
+      "path": "decisions/0010-pinned-recordings-and-worker-boundaries.md"
+    },
+    {
       "id": "index",
       "type": "index",
       "status": "implemented",
@@ -121,6 +136,7 @@
       "type": "api",
       "status": "implemented",
       "links": [
+        "adr-0010",
         "adr-0007",
         "adr-0005",
         "architecture",
@@ -180,6 +196,7 @@
       "type": "api",
       "status": "implemented",
       "links": [
+        "adr-0010",
         "adr-0007",
         "architecture",
         "verification"
@@ -202,6 +219,7 @@
       "type": "pipeline",
       "status": "implemented",
       "links": [
+        "adr-0010",
         "adr-0007",
         "architecture",
         "verification"
@@ -397,6 +415,7 @@
       "type": "pipeline",
       "status": "implemented",
       "links": [
+        "adr-0010",
         "architecture",
         "quality"
       ],
@@ -439,6 +458,7 @@
       "type": "pipeline",
       "status": "implemented",
       "links": [
+        "adr-0010",
         "worker",
         "architecture"
       ],
@@ -470,6 +490,7 @@
       "type": "schema",
       "status": "implemented",
       "links": [
+        "adr-0010",
         "adr-0007",
         "architecture",
         "quality"
@@ -506,6 +527,7 @@
       "type": "component",
       "status": "implemented",
       "links": [
+        "adr-0010",
         "architecture",
         "verification"
       ],
@@ -650,8 +672,40 @@
       "to": "quality"
     },
     {
+      "from": "adr-0010",
+      "to": "worker"
+    },
+    {
+      "from": "adr-0010",
+      "to": "capture"
+    },
+    {
+      "from": "adr-0010",
+      "to": "recovery"
+    },
+    {
+      "from": "adr-0010",
+      "to": "inference"
+    },
+    {
+      "from": "adr-0010",
+      "to": "schema"
+    },
+    {
+      "from": "adr-0010",
+      "to": "api"
+    },
+    {
+      "from": "adr-0010",
+      "to": "authentication"
+    },
+    {
       "from": "index",
       "to": "architecture"
+    },
+    {
+      "from": "api",
+      "to": "adr-0010"
     },
     {
       "from": "api",
@@ -795,6 +849,10 @@
     },
     {
       "from": "authentication",
+      "to": "adr-0010"
+    },
+    {
+      "from": "authentication",
       "to": "adr-0007"
     },
     {
@@ -816,6 +874,10 @@
     {
       "from": "body_state",
       "to": "dataset_body_state"
+    },
+    {
+      "from": "capture",
+      "to": "adr-0010"
     },
     {
       "from": "capture",
@@ -1023,6 +1085,10 @@
     },
     {
       "from": "inference",
+      "to": "adr-0010"
+    },
+    {
+      "from": "inference",
       "to": "architecture"
     },
     {
@@ -1063,6 +1129,10 @@
     },
     {
       "from": "recovery",
+      "to": "adr-0010"
+    },
+    {
+      "from": "recovery",
       "to": "worker"
     },
     {
@@ -1088,6 +1158,10 @@
     {
       "from": "review",
       "to": "verification"
+    },
+    {
+      "from": "schema",
+      "to": "adr-0010"
     },
     {
       "from": "schema",
@@ -1136,6 +1210,10 @@
     {
       "from": "verification",
       "to": "quality"
+    },
+    {
+      "from": "worker",
+      "to": "adr-0010"
     },
     {
       "from": "worker",

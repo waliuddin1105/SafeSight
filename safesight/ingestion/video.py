@@ -13,7 +13,7 @@ import numpy as np
 def frames(path: Path, fps: float = 5) -> Iterator[tuple[float, np.ndarray]]:
     """Yield sampled RGB frames using presentation timestamps."""
     next_time = 0.0
-    with av.open(str(path)) as container:
+    with av.open(str(path), timeout=10) as container:
         stream = container.streams.video[0]
         native_fps = float(stream.average_rate or fps)
         origin = None

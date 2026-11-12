@@ -47,4 +47,20 @@ def settings() -> dict[str, Any]:
     value["migration_database_url"] = os.getenv("MIGRATION_DATABASE_URL") or value["database_url"]
     value["secret_key"] = os.getenv("SECRET_KEY", "")
     value["evaluation_mode"] = os.getenv("EVALUATION_MODE", str(value["evaluation_mode"])).lower() == "true"
+    from safesight.contracts.configuration import validate_policy
+
+    policy = validate_policy(read_yaml(value["inference_config"]))
+    if value["sample_fps"] != policy["sample_fps"]:
+        raise ValueError("Application and inference sampling rates must match")
+    for name in (
+        "sample_fps",
+        "max_upload_bytes",
+        "max_frame_bytes",
+        "max_frame_pixels",
+        "pending_frame_seconds",
+        "worker_lease_seconds",
+        "decode_timeout_seconds",
+    ):
+        if isinstance(value[name], bool) or value[name] <= 0:
+            raise ValueError(f"{name} must be positive")
     return value

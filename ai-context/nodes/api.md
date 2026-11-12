@@ -3,6 +3,7 @@ id: api
 type: api
 status: implemented
 links:
+- adr-0010
 - adr-0007
 - adr-0005
 - architecture
@@ -25,3 +26,5 @@ Camera clocks are normalized to each source generation. Restart clears old spool
 The app factory registers resource blueprints in backend/routes. Security, request validation, serialization, handlers and CLI are separate modules. Resources come from current_app extensions; route URLs and response behavior are preserved.
 
 Login now accepts email/password through Supabase; protected media and API calls retain same-origin cookies/CSRF. Logout destroys backend tokens even during provider outages.
+
+Jobs history/cancel/video/predictions/incidents/metrics and model-version listing are implemented. OpenAPI is generated and served at the authenticated /api/v1/openapi.json endpoint.

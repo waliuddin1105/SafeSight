@@ -13,12 +13,12 @@ import time
 import cv2
 import numpy as np
 from PIL import Image
-from sqlalchemy import or_, select, text
+from sqlalchemy import select, text
 
 from safesight.config import read_yaml, settings, within
 from safesight.inference.engine import Engine
 from safesight.inference.state import dumps, loads, blob_references
-from safesight.ingestion.video import frames, write_video
+from safesight.ingestion.video import write_video
 from safesight.model_loaders.registry import Registry
 from safesight.storage.database import database
 from safesight.storage.schema import (
@@ -27,6 +27,9 @@ from safesight.storage.schema import (
     Incident,
     IncidentPrediction,
     Job,
+    JobFrame,
+    AuthSession,
+    LoginAttempt,
     Location,
     ModelVersion,
     RuntimeSnapshot,
@@ -46,11 +49,14 @@ class Worker:
         self.config = config or settings()
         self.db_engine, self.sessions = database(self.config["database_url"])
         self.owner_connection = None
+        self.owner_pid = None
         if self.db_engine.dialect.name == "postgresql":
-            self.owner_connection = self.db_engine.connect()
+            self.owner_connection = self.db_engine.connect().execution_options(isolation_level="AUTOCOMMIT")
             if not self.owner_connection.scalar(text("SELECT pg_try_advisory_lock(73624411)")):
                 self.owner_connection.close()
                 raise RuntimeError("Another SafeSight worker already owns this database")
+        if self.owner_connection is not None:
+            self.owner_pid = self.owner_connection.scalar(text("SELECT pg_backend_pid()"))
         self.registry = Registry(
             self.config["models_root"],
             self.config["evaluation_mode"],
@@ -93,13 +99,20 @@ class Worker:
         self.video_jobs = {}
         self.adapter_buffers = {}
         self.model_ids = {}
+        self.job_contexts = {}
+        self.processing_job = None
         with self.sessions.begin() as db:
             # The PostgreSQL owner lock proves the previous worker is no longer active.
             for job in db.scalars(select(Job).where(Job.state == "running")):
                 job.state, job.worker_id, job.lease_until = "paused", None, None
             recovered = set()
             for snapshot in db.scalars(select(RuntimeSnapshot)):
-                if snapshot.fingerprint != self.fingerprint:
+                job_id = snapshot.key.split(":", 2)[-1]
+                saved_job = db.get(Job, job_id) if job_id else None
+                expected = (
+                    saved_job.snapshot.get("fingerprint") if saved_job and saved_job.snapshot else self.fingerprint
+                )
+                if snapshot.fingerprint != expected:
                     db.delete(snapshot)
                     continue
                 try:
@@ -204,10 +217,14 @@ class Worker:
         key = f"{source.id}:{source.generation}:{session_key}"
         if key not in self.engines:
             config = dict(self.policy)
-            with self.sessions() as db:
-                location = db.get(Location, source.location_id)
-                if location and location.policies.get("body_state"):
-                    config["body_state"] = {**config["body_state"], **location.policies["body_state"]}
+            if session_key and "location_policies" in source.config:
+                policies = source.config["location_policies"]
+            else:
+                with self.sessions() as db:
+                    location = db.get(Location, source.location_id)
+                    policies = location.policies if location else {}
+            if policies.get("body_state"):
+                config["body_state"] = {**config["body_state"], **policies["body_state"]}
             self.engines[key] = Engine(
                 config, self.thresholds, {**source.config, "fusion_enabled": self.fusion_enabled}
             )
@@ -234,7 +251,33 @@ class Worker:
                     self.registry.status[slug] = {"ready": False, "reason": str(error)}
         people = self.registry.pose.extract(rgb) if self.registry.pose else []
         alerts = self.engines[key].process(predictions, people, timestamp)
+        self.assert_owner()
         with self.sessions.begin() as db:
+            if session_key:
+                existing_frame = db.scalar(
+                    select(JobFrame).where(JobFrame.job_id == session_key, JobFrame.timestamp == timestamp)
+                )
+                if existing_frame is None:
+                    db.add(
+                        JobFrame(
+                            job_id=session_key,
+                            timestamp=timestamp,
+                            predictions=[
+                                {
+                                    "slug": p.slug,
+                                    "model_version": p.model_version,
+                                    "scores": p.scores,
+                                    "unknown_reason": p.unknown_reason,
+                                    "detections": [
+                                        {"label": d.label, "score": d.score, "box": list(d.box), "track_id": d.track_id}
+                                        for d in p.detections
+                                    ],
+                                }
+                                for p in predictions
+                            ],
+                            unknown=dict(self.engines[key].unknown),
+                        )
+                    )
             current = db.get(Source, source.id)
             current.health = {
                 **current.health,
@@ -325,103 +368,97 @@ class Worker:
             with self.sessions.begin() as db:
                 self.checkpoint(db, key)
 
+    def assert_owner(self) -> None:
+        """A lost dedicated advisory-lock connection must stop all writes."""
+        if self.owner_connection is not None:
+            try:
+                pid = self.owner_connection.scalar(text("SELECT pg_backend_pid()"))
+                if pid != self.owner_pid:
+                    raise RuntimeError("Worker ownership connection was replaced")
+            except Exception as error:
+                raise RuntimeError("Worker database ownership connection lost; restart worker") from error
+
     def tick(self) -> bool:
+        """Claim briefly, decode/infer outside the transaction, then commit progress."""
+        self.assert_owner()
         self.release_finished_sessions()
         if time.monotonic() - self.last_recovery_gc > 30:
             self.collect_recovery_blobs()
+            with self.sessions.begin() as db:
+                from sqlalchemy import delete
+
+                db.execute(delete(AuthSession).where(AuthSession.expires_at < utcnow()))
+                db.execute(delete(LoginAttempt).where(LoginAttempt.expires_at < utcnow()))
         self.heartbeat()
-        with self.sessions.begin() as db:
-            source = db.scalar(select(Source).where(Source.active.is_(True)))
-            if source:
-                if source.kind == "browser":
-                    packet = db.scalar(
-                        select(FramePacket)
-                        .where(FramePacket.source_id == source.id)
-                        .order_by(FramePacket.sequence)
-                        .with_for_update(skip_locked=True)
-                    )
-                    if packet:
-                        path = within(self.media, packet.path)
-                        try:
-                            rgb = np.asarray(Image.open(path).convert("RGB"))
-                            self.process(source, rgb, packet.timestamp, packet.captured_at)
-                        except (OSError, ValueError, RuntimeError) as error:
-                            LOG.exception("Live frame processing failed")
-                            source.active = False
-                            source.health = {**source.health, "status": "failed", "error": str(error)}
-                        db.delete(packet)
-                        try:
-                            path.unlink(missing_ok=True)
-                        except OSError:
-                            LOG.exception("Could not remove consumed spool packet")
-                        return True
-                    if source.last_frame_at and utcnow() - source.last_frame_at.replace(
-                        tzinfo=timezone.utc
-                    ) > timedelta(seconds=self.config["source_timeout_seconds"]):
-                        source.active = False
-                        source.health = {**source.health, "status": "disconnected"}
-                    else:
-                        return False
-                else:
-                    if source.id not in self.captures:
-                        self.captures[source.id] = cv2.VideoCapture(
-                            source.config.get("uri") if source.kind == "rtsp" else source.config.get("device", 0)
-                        )
-                    ok, bgr = self.captures[source.id].read()
-                    if not ok:
-                        source.active = False
-                        source.health = {"status": "capture_failed"}
-                    else:
-                        self.process(source, cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB), time.monotonic(), utcnow())
-                        time.sleep(1 / self.config["sample_fps"])
-                        return True
-            job = db.scalar(
-                select(Job)
-                .where(
-                    or_(Job.state.in_(["queued", "paused"]), (Job.state == "running") & (Job.lease_until < utcnow()))
-                )
-                .order_by(Job.created_at)
-                .with_for_update(skip_locked=True)
+        packet = None
+        with self.sessions() as db:
+            source = db.scalar(
+                select(Source).where(Source.active.is_(True), Source.kind != "upload").order_by(Source.id)
             )
-            if not job:
-                # Continue a job already leased to this worker.
-                job = db.scalar(select(Job).where(Job.state == "running", Job.worker_id == self.worker_id))
-            if not job:
-                return False
-            job.state, job.worker_id = "running", self.worker_id
-            job.lease_until = utcnow() + timedelta(seconds=self.config["worker_lease_seconds"])
-            source = db.get(Source, job.source_id)
-            if job.id not in self.video_jobs:
-                self.video_jobs[job.id] = iter(frames(within(self.media, job.path), self.config["sample_fps"]))
-            try:
-                timestamp, rgb = next(self.video_jobs[job.id])
-                while timestamp <= job.cursor:
-                    timestamp, rgb = next(self.video_jobs[job.id])
-                self.process(
-                    source,
-                    rgb,
-                    timestamp,
-                    job.captured_at + timedelta(seconds=timestamp) if job.captured_at else None,
-                    job.id,
+            if source and source.kind == "browser":
+                packet = db.scalar(
+                    select(FramePacket)
+                    .where(FramePacket.source_id == source.id, FramePacket.generation == source.generation)
+                    .order_by(FramePacket.sequence)
                 )
-                job.cursor = timestamp
-            except StopIteration:
-                job.state = "completed"
-                key = f"{source.id}:{source.generation}:{job.id}"
-                if key in self.buffers:
-                    self.flush_clips(job.cursor, key, force=True)
-                    snapshot = db.get(RuntimeSnapshot, key)
-                    if snapshot:
-                        db.delete(snapshot)
-                    self.buffers.pop(key, None)
-                    self.engines.pop(key, None)
-                    for buffer_key in [k for k in self.adapter_buffers if k[0] == key]:
-                        self.adapter_buffers.pop(buffer_key, None)
-                self.video_jobs.pop(job.id, None)
-            except Exception as error:
-                LOG.exception("Job failed")
-                job.state, job.error = "failed", str(error)
-            return True
+        if source:
+            if source.kind == "browser":
+                if packet:
+                    path = within(self.media, packet.path)
+                    try:
+                        with Image.open(path) as image:
+                            rgb = np.asarray(image.convert("RGB"))
+                        self.process(source, rgb, packet.timestamp, packet.captured_at)
+                    except (OSError, ValueError) as error:
+                        self.fail_source(source.id, "Frame decoding failed")
+                        LOG.warning("Frame decoding failed: %s", type(error).__name__)
+                    with self.sessions.begin() as db:
+                        consumed = db.get(FramePacket, packet.id)
+                        if consumed:
+                            db.delete(consumed)
+                    path.unlink(missing_ok=True)
+                    return True
+                if source.last_frame_at and utcnow() - source.last_frame_at.replace(tzinfo=timezone.utc) > timedelta(
+                    seconds=self.config["source_timeout_seconds"]
+                ):
+                    self.fail_source(source.id, "disconnected")
+                else:
+                    return False
+            else:
+                if source.id not in self.captures:
+                    from safesight.ingestion.capture import CaptureReader
+
+                    target = source.config.get("uri") if source.kind == "rtsp" else source.config.get("device", 0)
+                    capture = CaptureReader(
+                        target,
+                        rtsp=source.kind == "rtsp",
+                        fps=self.config["sample_fps"],
+                        timeout=self.config["decode_timeout_seconds"],
+                    )
+                    self.captures[source.id] = capture
+                ok, bgr = self.captures[source.id].read()
+                if not ok:
+                    self.fail_source(source.id, "capture_failed")
+                else:
+                    self.process(source, cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB), time.monotonic(), utcnow())
+                    time.sleep(1 / self.config["sample_fps"])
+                    return True
+        return self.tick_job()
+
+    def fail_source(self, source_id: str, reason: str) -> None:
+        capture = self.captures.pop(source_id, None)
+        if capture:
+            capture.release()
+        with self.sessions.begin() as db:
+            source = db.get(Source, source_id)
+            if source:
+                source.active = False
+                source.health = {**source.health, "status": reason}
+
+    def tick_job(self) -> bool:
+        from safesight.worker.jobs import process_job
+
+        return process_job(self)
 
     def release_finished_sessions(self) -> None:
         """Finalize stopped sessions and keep memory/snapshots bounded across jobs."""
@@ -431,7 +468,7 @@ class Worker:
                 source = db.get(Source, source_id)
                 job = db.get(Job, job_id) if job_id else None
                 finished = (
-                    (job is None or job.state in ("completed", "failed"))
+                    (job is None or job.state in ("completed", "failed", "cancelled"))
                     if job_id
                     else (source is None or not source.active or source.generation != int(generation))
                 )
@@ -442,6 +479,10 @@ class Worker:
                 snapshot = db.get(RuntimeSnapshot, key)
                 if snapshot:
                     db.delete(snapshot)
+            if job_id:
+                iterator = self.video_jobs.pop(job_id, None)
+                if iterator is not None and hasattr(iterator, "close"):
+                    iterator.close()
             self.engines.pop(key, None)
             self.buffers.pop(key, None)
             for adapter_key in [k for k in self.adapter_buffers if k[0] == key]:
@@ -451,9 +492,14 @@ class Worker:
                 capture.release()
 
     def close(self) -> None:
+        for iterator in self.video_jobs.values():
+            if hasattr(iterator, "close"):
+                iterator.close()
         for capture in self.captures.values():
             capture.release()
         self.registry.close()
+        for registry, _, _, _ in self.job_contexts.values():
+            registry.close()
         if self.owner_connection is not None:
             self.owner_connection.close()
         self.db_engine.dispose()

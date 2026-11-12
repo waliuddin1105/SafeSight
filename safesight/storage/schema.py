@@ -57,6 +57,13 @@ class AuthSession(Base):
     verified_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
 
+class LoginAttempt(Base):
+    __tablename__ = "login_attempts"
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    attempts: Mapped[int] = mapped_column(Integer, default=1)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+
+
 class Location(Base):
     __tablename__ = "locations"
     id: Mapped[str] = mapped_column(Uuid(as_uuid=False), primary_key=True, default=identifier)
@@ -85,7 +92,7 @@ class Source(Base):
 class Job(Base):
     __tablename__ = "processing_jobs"
     __table_args__ = (
-        CheckConstraint("state IN ('queued','running','completed','failed','paused')"),
+        CheckConstraint("state IN ('queued','running','completed','failed','paused','cancelled')", name="ck_job_state"),
         Index("ix_jobs_state_created", "state", "created_at"),
     )
     id: Mapped[str] = mapped_column(Uuid(as_uuid=False), primary_key=True, default=identifier)
@@ -99,6 +106,20 @@ class Job(Base):
     lease_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     worker_id: Mapped[str | None] = mapped_column(String(80))
     error: Mapped[str | None] = mapped_column(Text)
+    snapshot: Mapped[dict] = mapped_column(JSON, default=dict)
+    cancel_requested: Mapped[bool] = mapped_column(Boolean, default=False)
+    processing_seconds: Mapped[float] = mapped_column(Float, default=0)
+    processed_frames: Mapped[int] = mapped_column(Integer, default=0)
+
+
+class JobFrame(Base):
+    __tablename__ = "job_frames"
+    __table_args__ = (UniqueConstraint("job_id", "timestamp"),)
+    id: Mapped[str] = mapped_column(Uuid(as_uuid=False), primary_key=True, default=identifier)
+    job_id: Mapped[str] = mapped_column(ForeignKey("processing_jobs.id"), index=True)
+    timestamp: Mapped[float] = mapped_column(Float)
+    predictions: Mapped[list] = mapped_column(JSON)
+    unknown: Mapped[dict] = mapped_column(JSON)
 
 
 class FramePacket(Base):

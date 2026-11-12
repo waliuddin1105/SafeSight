@@ -96,6 +96,7 @@ class PoseExtractor:
 
         if not asset.is_file():
             raise FileNotFoundError(f"Pose asset missing: {asset}; use tools/fetch_pretrained.py")
+        self.asset_hash = hashlib.sha256(asset.read_bytes()).hexdigest()
         self.mp = mp
         self.model = mp.tasks.vision.PoseLandmarker.create_from_options(
             mp.tasks.vision.PoseLandmarkerOptions(
@@ -244,6 +245,8 @@ class Registry:
         device: str = "auto",
         selected: dict[str, str] | None = None,
         pose_asset: str = "_pretrained/pose_landmarker_lite.task",
+        cards: dict | None = None,
+        reusable: Registry | None = None,
     ):
         self.root, self.evaluation = root.resolve(), evaluation
         self.device = select_device(device)
@@ -251,12 +254,25 @@ class Registry:
         self.status: dict[str, dict] = {}
         self.pose: PoseExtractor | None = None
         pose_path = within(self.root, pose_asset)
+        self.owns_pose = True
         if pose_path.exists():
-            self.pose = PoseExtractor(pose_path)
+            pose_hash = hashlib.sha256(pose_path.read_bytes()).hexdigest()
+            if (
+                reusable is not None
+                and reusable.pose is not None
+                and getattr(reusable.pose, "asset_hash", None) == pose_hash
+            ):
+                self.pose, self.owns_pose = reusable.pose, False
+            else:
+                self.pose = PoseExtractor(pose_path)
         for slug in selected if selected is not None else CLASSES:
             try:
                 card_path = within(self.root, (selected or {}).get(slug, f"{slug}/model_card.json"))
-                card = ModelCard.model_validate_json(card_path.read_text(encoding="utf-8"))
+                card = (
+                    ModelCard.model_validate(cards[slug])
+                    if cards is not None
+                    else ModelCard.model_validate_json(card_path.read_text(encoding="utf-8"))
+                )
                 if (
                     card.schema_version != 1
                     or card.preprocessing != "v1"
@@ -276,7 +292,12 @@ class Registry:
                 artifact = within(self.root, card.artifact)
                 if hashlib.sha256(artifact.read_bytes()).hexdigest() != card.sha256:
                     raise ValueError("Model artifact checksum mismatch")
-                if card.loader == "ultralytics":
+                existing = (
+                    reusable.adapters.get(slug) if reusable is not None and reusable.device == self.device else None
+                )
+                if existing is not None and existing.card.model_dump() == card.model_dump():
+                    adapter = existing
+                elif card.loader == "ultralytics":
                     adapter = YoloAdapter(card, artifact, self.device)
                 elif card.loader == "torchscript":
                     adapter = TorchAdapter(card, artifact, self.device, self.pose)
@@ -294,7 +315,7 @@ class Registry:
                 self.status[slug] = {"ready": False, "reason": str(error)}
 
     def close(self) -> None:
-        if self.pose:
+        if self.pose and self.owns_pose:
             self.pose.close()
 
     def temporal_policy(self, fallback: dict) -> dict:
@@ -310,4 +331,6 @@ class Registry:
             if any(p != global_policies[0] for p in global_policies):
                 raise ValueError("Models were calibrated with incompatible global temporal policies")
             result.update(global_policies[0])
-        return result
+        from safesight.contracts.configuration import validate_policy
+
+        return validate_policy(result)

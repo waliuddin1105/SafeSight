@@ -7,11 +7,14 @@ import secrets
 from urllib.parse import urlparse
 
 from flask import abort, jsonify, request, session
+from flask import current_app as app
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from werkzeug.exceptions import HTTPException
 
 
-from flask import current_app as app
+class InsufficientStorage(HTTPException):
+    code = 507
+    description = "Insufficient media storage"
 
 
 def protect_session():
@@ -56,6 +59,7 @@ def database_error(error):
 
 
 def register_handlers(app):
+    app.aborter.mapping[507] = InsufficientStorage
     app.before_request(protect_session)
     app.after_request(headers)
     app.errorhandler(HTTPException)(http_error)

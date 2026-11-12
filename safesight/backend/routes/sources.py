@@ -45,7 +45,18 @@ def locations():
                 ZoneInfo(timezone_name)
             except (KeyError, TypeError):
                 abort(400, "Unknown timezone")
-            location = Location(name=name, timezone=timezone_name, policies=data.get("policies", {}))
+            policies = data.get("policies", {})
+            if not isinstance(policies, dict) or any(k != "body_state" for k in policies):
+                abort(400, "Location policies must be an object containing optional body_state rules")
+            if "body_state" in policies:
+                from safesight.config import read_yaml
+                from safesight.contracts.configuration import TemporalRule
+
+                base = read_yaml(cfg["inference_config"])["body_state"]
+                if not isinstance(policies["body_state"], dict):
+                    abort(400, "body_state policy must be an object")
+                TemporalRule.model_validate({**base, **policies["body_state"]})
+            location = Location(name=name, timezone=timezone_name, policies=policies)
             db.add(location)
             db.flush()
             return jsonify(serialize(location)), 201
