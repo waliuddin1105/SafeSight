@@ -31,3 +31,5 @@ Recipes are colocated at training/<slug>/config.yaml; old configs/training paths
 Image training and frozen qualification are separate commands; see docs/IMPROVEMENTS.md and ADR 0008.
 
 Validation-only comparison and measured failure galleries are implemented; see ADR 0009.
+
+Checkpoint restoration is shared by resume and OOM rollback and tested with inert state objects. Qualification uses the frozen card policy and receiving model-root assets. Optional recipes travel with model bundles.

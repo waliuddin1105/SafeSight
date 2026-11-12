@@ -53,10 +53,47 @@ def test_disk_features_and_exact_accumulation_weights(tmp_path):
 
 def test_failure_gallery_uses_measured_examples(tmp_path):
     from training.common.reports import failure_gallery, dataset_inventory
+
     root = generate("phone_usage")
     inventory = dataset_inventory(root, "phone_usage")
     assert inventory["class_instances"]["phone"] > 0
     output = tmp_path / "gallery"
-    failure_gallery(root, output, [{"video": "videos/test/evaluation_0.mp4", "timestamp": 0, "subtype": "phone_usage", "kind": "false_negative"}])
+    failure_gallery(
+        root,
+        output,
+        [{"video": "videos/test/evaluation_0.mp4", "timestamp": 0, "subtype": "phone_usage", "kind": "false_negative"}],
+    )
     assert (output / "failure_0.jpg").exists()
     assert "false_negative" in (output / "index.html").read_text()
+
+
+def test_resume_and_oom_restore_state_without_training():
+    import random
+    import numpy as np
+    from training.common.checkpoints import restore_state
+
+    class State:
+        def load_state_dict(self, value):
+            self.value = value
+
+    model, optimizer, scheduler = State(), State(), State()
+    checkpoint = {
+        "model": {"weight": 1},
+        "optimizer": {"step": 7},
+        "scheduler": {"epoch": 2},
+        "python_rng": random.getstate(),
+        "numpy_rng": np.random.get_state(),
+        "torch_rng": torch.get_rng_state(),
+    }
+    expected = random.random(), float(np.random.random()), float(torch.rand(1))
+    try:
+        restore_state(model, optimizer, scheduler, checkpoint)
+        actual = random.random(), float(np.random.random()), float(torch.rand(1))
+        assert actual == expected
+        assert model.value == checkpoint["model"]
+        assert optimizer.value == checkpoint["optimizer"]
+        assert scheduler.value == checkpoint["scheduler"]
+    finally:
+        random.setstate(checkpoint["python_rng"])
+        np.random.set_state(checkpoint["numpy_rng"])
+        torch.set_rng_state(checkpoint["torch_rng"])

@@ -25,6 +25,7 @@ def main() -> int:
     saved = json.loads((version / "training_config.json").read_text())
     # Reuse training preprocessing and split assignment; only input location moves.
     saved["dataset"] = config["dataset"]
+    saved["pretrained_root"] = str(version.parents[2] / "_pretrained")
     dataset = materialize_splits(resolve_path(saved["dataset"]), args.slug, saved["seed"], tuple(saved["split_ratios"]))
     return qualify_version(args.slug, version, dataset, saved)
 

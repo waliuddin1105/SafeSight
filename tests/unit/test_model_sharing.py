@@ -35,8 +35,10 @@ def test_transfer_preserves_card_quality_and_never_activates(tmp_path):
     source, target = tmp_path / "source", tmp_path / "target"
     fixture(source)
     archive = tmp_path / "shared.zip"
+    (source / "body_state/versions/test-run/training_config.json").write_text('{"slug":"body_state"}')
     checksum = export_model(source, "body_state", "test-run", archive)
     destination = fetch_model(target, str(archive), checksum)
+    assert (destination / "training_config.json").exists()
     assert json.loads((destination / "model_card.json").read_text())["quality"]["status"] == "FAIL"
     assert not (target / "body_state/model_card.json").exists()
     assert fetch_model(target, str(archive), checksum) == destination

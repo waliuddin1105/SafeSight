@@ -29,6 +29,7 @@ from safesight.contracts import CLASSES, YOLO_SLUGS
 from safesight.ingestion.video import frames
 from safesight.model_loaders.registry import PoseExtractor, Registry, entrance_frame, select_device
 from training.common.assets import fetch
+from training.common.checkpoints import restore_state
 from training.common.datasets import jsonl, sha256, validate
 from training.common.evaluation import cache_predictions, calibrate, quality_gate, replay
 from training.common.fixtures import generate
@@ -380,16 +381,9 @@ def fit_classifier(
     best_state = copy.deepcopy(network.state_dict())
     if resume:
         checkpoint = torch.load(resume, map_location=device, weights_only=False)
-        network.load_state_dict(checkpoint["model"])
-        optimizer.load_state_dict(checkpoint["optimizer"])
-        scheduler.load_state_dict(checkpoint["scheduler"])
+        restore_state(network, optimizer, scheduler, checkpoint)
         start, best, stale = checkpoint["epoch"], checkpoint["best"], checkpoint["stale"]
         best_state = checkpoint["best_state"]
-        random.setstate(checkpoint["python_rng"])
-        np.random.set_state(checkpoint["numpy_rng"])
-        torch.set_rng_state(checkpoint["torch_rng"].cpu())
-        if torch.cuda.is_available() and checkpoint.get("cuda_rng"):
-            torch.cuda.set_rng_state_all(checkpoint["cuda_rng"])
     batch = checkpoint.get("batch", config["batch"]) if resume else config["batch"]
     epoch = start
     while epoch < config["epochs"]:
@@ -469,14 +463,7 @@ def fit_classifier(
             if batch == 1:
                 raise RuntimeError("Out of GPU memory at batch 1; configure device: cpu")
             rollback = torch.load(run / "epoch-start.pt", map_location="cpu", weights_only=False)
-            network.load_state_dict(rollback["model"])
-            optimizer.load_state_dict(rollback["optimizer"])
-            scheduler.load_state_dict(rollback["scheduler"])
-            random.setstate(rollback["python_rng"])
-            np.random.set_state(rollback["numpy_rng"])
-            torch.set_rng_state(rollback["torch_rng"])
-            if rollback["cuda_rng"]:
-                torch.cuda.set_rng_state_all(rollback["cuda_rng"])
+            restore_state(network, optimizer, scheduler, rollback)
             batch = max(1, batch // 2)
             optimizer.zero_grad(set_to_none=True)
             torch.cuda.empty_cache()
@@ -671,7 +658,7 @@ def qualify_version(slug: str, version: Path, dataset: Path, config: dict) -> in
         data = classifier_data(config, dataset, run, model, device) if slug not in YOLO_SLUGS else None
         if slug in YOLO_SLUGS:
             stage_yolo(dataset, run / "dataset-view", slug)
-        inference_config = read_yaml(config["inference_config"])
+        inference_config = card["temporal_policy"]
         val_cache = cache_predictions(registry, slug, dataset, "val")
         thresholds, curves = calibrate(
             val_cache, slug, inference_config, config["quality"]["precision"], config["quality"]

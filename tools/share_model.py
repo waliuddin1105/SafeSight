@@ -48,7 +48,8 @@ def export_model(root: Path, slug: str, run_id: str, output: Path) -> str:
     sidecar = output.with_suffix(output.suffix + ".sha256")
     if output.exists() or sidecar.exists():
         raise ValueError("Export destination already exists; choose a new name")
-    files = {p.relative_to(root).as_posix(): file_hash(p) for p in (artifact, card)}
+    metadata = [p for p in (card.parent / "training_config.json", card.parent / "training_report.json") if p.is_file()]
+    files = {p.relative_to(root).as_posix(): file_hash(p) for p in (artifact, card, *metadata)}
     with zipfile.ZipFile(output, "x", compression=zipfile.ZIP_STORED) as archive:
         for name in files:
             archive.write(within(root, name), name)
@@ -83,8 +84,10 @@ def fetch_model(root: Path, source: str, checksum: str) -> Path:
         slug, run_id = bundle["slug"], bundle["run_id"]
         artifact, _ = checked_card(extracted, slug, run_id)
         expected = {artifact.relative_to(extracted).as_posix(), f"{slug}/versions/{run_id}/model_card.json"}
-        if set(bundle["files"]) != expected:
-            raise ValueError("Bundle must contain exactly the selected weights and card")
+        optional = {f"{slug}/versions/{run_id}/training_config.json", f"{slug}/versions/{run_id}/training_report.json"}
+        if not expected.issubset(bundle["files"]) or not set(bundle["files"]).issubset(expected | optional):
+            raise ValueError("Bundle must contain selected weights/card and only approved training metadata")
+        expected = set(bundle["files"])
         actual = {p.relative_to(extracted).as_posix() for p in extracted.rglob("*") if p.is_file()}
         if actual != expected | {"bundle.json", ".extracted.json"}:
             raise ValueError("Unexpected files in model bundle")
