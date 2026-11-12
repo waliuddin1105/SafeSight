@@ -12,6 +12,7 @@ async function api(path: string, options: RequestInit = {}) {
   if (options.method && options.method !== 'GET') headers.set('X-CSRF-Token',csrf);
   const response = await fetch('/api/v1'+path,{...options,headers,credentials:'same-origin'});
   const data = await response.json();
+  if (response.status===401) window.dispatchEvent(new Event('auth-expired'));
   if (!response.ok) throw Object.assign(new Error(data.error?.message || 'Request failed'),{status:response.status});
   return data;
 }
@@ -25,6 +26,7 @@ function App() {
   const [workerAlive,setWorkerAlive]=useState(false);
   const date=(value:string|null)=>value ? new Date(value).toLocaleString('en-GB',{timeZone:'Asia/Karachi',dateStyle:'medium',timeStyle:'short'}) : 'Capture time unknown';
   const run=async(action:()=>Promise<void>)=>{setError('');try{await action()}catch(e){setError((e as Error).message)}};
+  useEffect(()=>{const expired=()=>{running.current=false;stream.current?.getTracks().forEach(t=>t.stop());setLive(false);setUser(null);setSelected(null);setIncidents([])};window.addEventListener('auth-expired',expired);return()=>window.removeEventListener('auth-expired',expired)},[]);
   useEffect(()=>{api('/auth/me').then(d=>{csrf=d.csrf_token;setUser(d.user)}).catch(e=>setError(e.message)).finally(()=>setLoading(false));return()=>{running.current=false;stream.current?.getTracks().forEach(t=>t.stop())}},[]);
   async function refresh(){
     const params=new URLSearchParams({page:String(page)});
@@ -56,7 +58,7 @@ function App() {
   async function upload(event:React.FormEvent<HTMLFormElement>){event.preventDefault();setBusy(true);const form=new FormData(event.currentTarget);await run(async()=>setJob(await api('/uploads',{method:'POST',body:form})));setBusy(false)}
   async function review(decision:string){if(!selected)return;await run(async()=>{await api('/incidents/'+selected.id+'/review',{method:'POST',body:JSON.stringify({decision,notes})});setSelected(await api('/incidents/'+selected.id));await refresh()})}
   if(loading)return <div className="signin"><ShieldCheck size={44}/><p>Connecting to SafeSight…</p></div>;
-  if(!user)return <main className="signin"><div className="brand"><ShieldCheck/>SafeSight<span>OPERATIONS</span></div><h1>A clearer view<br/>of workplace safety.</h1><p>Sign in to monitor sources and review incidents.</p><form onSubmit={login}><label>Username<input name="username" autoComplete="username" required/></label><label>Password<input name="password" type="password" autoComplete="current-password" required/></label><button>Sign in <ArrowUpRight size={18}/></button></form>{error&&<p role="alert" className="error">{error}</p>}</main>;
+  if(!user)return <main className="signin"><div className="brand"><ShieldCheck/>SafeSight<span>OPERATIONS</span></div><h1>A clearer view<br/>of workplace safety.</h1><p>Sign in with your invited Supabase account to monitor sources and review incidents.</p><form onSubmit={login}><label>Email<input name="email" type="email" autoComplete="username" required/></label><label>Password<input name="password" type="password" autoComplete="current-password" required/></label><button>Sign in <ArrowUpRight size={18}/></button></form>{error&&<p role="alert" className="error">{error}</p>}</main>;
   return <div className="shell"><aside><div className="brand"><ShieldCheck/>SafeSight</div><small>SAFETY OPERATIONS / 01</small><a href="#incidents" className="nav">Incident desk <ArrowUpRight size={16}/></a><a href="#capture" className="nav">Source control <Radio size={16}/></a><div className="aside-bottom"><p>Human judgment.<br/>Supported by sight.</p><small>{user.username} · {user.role}</small><button className="ghost" onClick={()=>run(async()=>{if(live)await stop();await api('/auth/logout',{method:'POST'});setUser(null);const d=await api('/auth/me');csrf=d.csrf_token})}>Sign out</button></div></aside>
   <main><header><span><i/> SAFESIGHT / MONITOR & REVIEW</span><span>Karachi · UTC+05:00</span></header><section className="intro"><div><p className="eyebrow">YOUR SAFETY DESK</p><h1>See what needs<br/><em>your attention.</em></h1></div><div className="count"><strong>{total.toString().padStart(2,'0')}</strong><span>incidents matching<br/>your filters</span></div></section>
   {error&&<div className="error" role="alert">{error}<button aria-label="Dismiss error" onClick={()=>setError('')}><X size={16}/></button></div>}

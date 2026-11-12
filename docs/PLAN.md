@@ -173,3 +173,7 @@ The user approved resource-based backend separation and requested automatic spli
 ## Approved update: colocated configs and model sharing
 
 ADR 0006 moves recipes beside train.py and selects shared-drive model bundles with checked export/fetch. Runtime packages and CI remain.
+
+## Approved update: Supabase database and authentication
+
+ADR 0007 supersedes local credentials and Compose PostgreSQL. Hosted PostgreSQL and Supabase email Auth use environment configuration. Cookie/CSRF protections and application role assignments remain; see SUPABASE.md.

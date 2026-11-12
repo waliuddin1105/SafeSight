@@ -3,6 +3,7 @@ id: deployment
 type: component
 status: implemented
 links:
+- adr-0007
 - architecture
 - quality
 ---
@@ -19,3 +20,5 @@ Input: .env secrets, read-only models and persistent media/database volumes. Out
 ## Gotchas
 
 Docker is unavailable on this verification host. CI includes image construction without training. Remote browser capture needs HTTPS. GPU passthrough and native USB are host-specific.
+
+Compose uses hosted DATABASE_URL from .env for migration/API/worker; bundled PostgreSQL and POSTGRES_* overrides were removed. Optional MIGRATION_DATABASE_URL selects a separate migration endpoint.

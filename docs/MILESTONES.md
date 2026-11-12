@@ -9,8 +9,8 @@ user's instruction. M8 and real model training are outside this pass.
 | M1 | Five collection contracts, grouped provenance, media/label/event validation, fixture generator | Corrupt/empty files, invalid labels, duplicate/source leakage and read-only checks |
 | M2 | Independent trainers, checkpoint/resume, validation calibration, test reports, size AP, explicit gates | Syntax, shared contracts, metric/gate tests and entrypoint isolation; no training executed |
 | M3 | Card loaders, shared crop/preprocessing, artifact policy, fusion qualification, temporal logic | Model replacement, hash rejection, crop parity, N-of-M/gaps, strong-fire preservation, recovery codec |
-| M4 | PostgreSQL schema and two reversible migrations | Fresh database upgrade/downgrade/upgrade; relational application integration |
-| M5 | Auth/CSRF, source controls, bounded frame queue, upload jobs, evidence and reviews | PostgreSQL tests, duplicate rejection, worker restart/pending clip recovery, evidence/filter/review flow |
+| M4 | Hosted PostgreSQL schema and migrations through 0003 (password removal is irreversible) | Fresh database upgrade/downgrade/upgrade; relational application integration |
+| M5 | Supabase Auth, application roles/CSRF, source controls, bounded frame queue, upload jobs, evidence and reviews | PostgreSQL tests, duplicate rejection, worker restart/pending clip recovery, evidence/filter/review flow |
 | M6 | React capture/upload/incident review dashboard and worker/fusion health | TypeScript production build; browser sign-in, filters, permission denial, capture and reconnect |
 | M7 | Docker image/Compose, setup and operation docs, CI without training | Source/Compose contract checks; local Docker runtime unavailable |
 

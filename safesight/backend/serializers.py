@@ -4,7 +4,7 @@ from safesight.storage.schema import Evidence
 
 def serialize(row) -> dict:
     """Serialize public columns, excluding credentials and internal media paths."""
-    hidden = {"password_hash", "path", "config", "worker_id"}
+    hidden = {"access_token", "refresh_token", "path", "config", "worker_id"}
     result = {}
     for column in row.__table__.columns:
         if column.name in hidden:

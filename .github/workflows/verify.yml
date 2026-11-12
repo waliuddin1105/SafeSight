@@ -39,7 +39,7 @@ jobs:
       - name: Browser checks against disposable test application
         run: |
           mkdir -p artifacts
-          python -m safesight.backend > artifacts/ci-api.log 2>&1 &
+          python tools/browser_fixture.py > artifacts/ci-api.log 2>&1 &
           safesight_api_pid=$!
           trap 'kill "$safesight_api_pid"' EXIT
           for attempt in {1..30}; do

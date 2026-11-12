@@ -2,7 +2,7 @@
 id: release_checks
 type: component
 status: implemented
-links: [verification, architecture]
+links: [adr-0007, verification, architecture]
 ---
 # Release Checks
 
@@ -17,3 +17,5 @@ Follow the linked component for the concrete data contract and source entrypoint
 ## Gotchas
 
 Untrained fixtures exercise software contracts; field performance requires measured held-out data.
+
+Hosted-DB Compose contract rejects DATABASE_URL overrides and no longer requires a bundled db service.

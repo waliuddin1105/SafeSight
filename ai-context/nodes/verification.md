@@ -3,6 +3,7 @@ id: verification
 type: component
 status: implemented
 links:
+- adr-0007
 - architecture
 - quality
 ---
@@ -21,3 +22,5 @@ Input: unit/integration/browser acceptance tests and tools/check_release.py. Out
 Do not confuse historical synthetic training reports with verification of the updated trainers. No real data accuracy or GPU/Docker claim is established here.
 
 Current result: 26 Python checks, TypeScript build, browser acceptance and source/release contracts pass. No train.py entrypoint was executed in the completion pass. Docker runtime remains unverified locally.
+
+Supabase identity/session tests use an explicit fake HTTP boundary against disposable PostgreSQL, not a production auth bypass. Remote connectivity and schema migration are checked separately; no real user password login is claimed.

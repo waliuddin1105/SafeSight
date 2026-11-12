@@ -38,10 +38,23 @@ class Base(DeclarativeBase):
 class User(Base):
     __tablename__ = "users"
     id: Mapped[str] = mapped_column(Uuid(as_uuid=False), primary_key=True, default=identifier)
-    username: Mapped[str] = mapped_column(String(80), unique=True)
-    password_hash: Mapped[str] = mapped_column(Text)
+    username: Mapped[str] = mapped_column(String(320), unique=True)
+    supabase_id: Mapped[str | None] = mapped_column(Uuid(as_uuid=False), unique=True)
     role: Mapped[str] = mapped_column(String(20), default="reviewer")
     active: Mapped[bool] = mapped_column(Boolean, default=True)
+
+
+class AuthSession(Base):
+    """Backend-only tokens for a signed, opaque browser session identifier."""
+
+    __tablename__ = "auth_sessions"
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True)
+    access_token: Mapped[str] = mapped_column(Text)
+    refresh_token: Mapped[str] = mapped_column(Text)
+    token_expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    verified_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
 
 class Location(Base):

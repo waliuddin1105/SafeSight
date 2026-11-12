@@ -9,11 +9,12 @@ from pathlib import Path
 from flask import Flask
 
 from safesight.config import settings
+from safesight.backend.supabase_auth import SupabaseAuth
 from safesight.storage.database import database
 
 
 from safesight.backend.errors import register_handlers
-from safesight.backend.cli import create_user
+from safesight.backend.cli import grant_user
 from safesight.backend.routes import auth, sources, uploads, incidents, health, frontend
 
 
@@ -22,6 +23,10 @@ def create_app(overrides: dict | None = None) -> Flask:
     cfg = {**settings(), **(overrides or {})}
     if len(cfg["secret_key"]) < 32:
         raise ValueError("SECRET_KEY must contain at least 32 characters; set it in .env")
+    if not cfg["supabase_url"].startswith("https://") or not cfg["supabase_publishable_key"].startswith(
+        "sb_publishable_"
+    ):
+        raise ValueError("Set SUPABASE_URL (HTTPS) and SUPABASE_PUBLISHABLE_KEY in .env")
     app = Flask(__name__, static_folder=None)
     app.config.update(
         SECRET_KEY=cfg["secret_key"],
@@ -37,6 +42,7 @@ def create_app(overrides: dict | None = None) -> Flask:
     media.mkdir(parents=True, exist_ok=True)
     app.extensions["login_attempts"] = {}
 
+    app.extensions["supabase_auth"] = SupabaseAuth(cfg["supabase_url"], cfg["supabase_publishable_key"])
     register_handlers(app)
     app.register_blueprint(auth.bp)
     app.register_blueprint(sources.bp)
@@ -44,5 +50,5 @@ def create_app(overrides: dict | None = None) -> Flask:
     app.register_blueprint(incidents.bp)
     app.register_blueprint(health.bp)
     app.register_blueprint(frontend.bp)
-    app.cli.add_command(create_user)
+    app.cli.add_command(grant_user)
     return app

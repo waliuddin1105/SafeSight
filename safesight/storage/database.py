@@ -5,7 +5,7 @@ from sqlalchemy.orm import sessionmaker
 
 
 def database(url: str):
-    engine = create_engine(url, pool_pre_ping=True)
+    engine = create_engine(url, pool_pre_ping=True, hide_parameters=True)
     if url.startswith("sqlite"):
 
         @event.listens_for(engine, "connect")

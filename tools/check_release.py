@@ -57,8 +57,11 @@ def check() -> dict:
     if (ROOT / "ai-context/graph.json").read_text() != graph:
         raise ValueError("Context graph is stale")
     services = yaml.safe_load((ROOT / "compose.yaml").read_text())["services"]
-    if set(services) != {"db", "api", "worker", "migrate"}:
+    if set(services) != {"api", "worker", "migrate"}:
         raise ValueError("Incomplete Compose service set")
+    for service in services.values():
+        if "DATABASE_URL" in service.get("environment", {}):
+            raise ValueError("Compose must inherit the hosted database URL from .env")
     for name in ("api", "worker"):
         if not any("models:ro" in mount for mount in services[name]["volumes"]):
             raise ValueError(f"Models must be mounted read-only: {name}")

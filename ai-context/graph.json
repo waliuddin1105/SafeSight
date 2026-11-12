@@ -72,6 +72,19 @@
       "path": "decisions/0006-training-configs-and-model-sharing.md"
     },
     {
+      "id": "adr-0007",
+      "type": "decision",
+      "status": "accepted",
+      "links": [
+        "authentication",
+        "api",
+        "schema",
+        "deployment",
+        "verification"
+      ],
+      "path": "decisions/0007-supabase-database-and-auth.md"
+    },
+    {
       "id": "index",
       "type": "index",
       "status": "implemented",
@@ -85,6 +98,7 @@
       "type": "api",
       "status": "implemented",
       "links": [
+        "adr-0007",
         "adr-0005",
         "architecture",
         "quality"
@@ -143,6 +157,7 @@
       "type": "api",
       "status": "implemented",
       "links": [
+        "adr-0007",
         "architecture",
         "verification"
       ],
@@ -164,6 +179,7 @@
       "type": "pipeline",
       "status": "implemented",
       "links": [
+        "adr-0007",
         "architecture",
         "verification"
       ],
@@ -185,6 +201,7 @@
       "type": "component",
       "status": "implemented",
       "links": [
+        "adr-0007",
         "architecture",
         "quality"
       ],
@@ -292,6 +309,7 @@
       "type": "component",
       "status": "implemented",
       "links": [
+        "adr-0007",
         "architecture",
         "quality"
       ],
@@ -404,6 +422,7 @@
       "type": "component",
       "status": "implemented",
       "links": [
+        "adr-0007",
         "verification",
         "architecture"
       ],
@@ -424,6 +443,7 @@
       "type": "schema",
       "status": "implemented",
       "links": [
+        "adr-0007",
         "architecture",
         "quality"
       ],
@@ -446,6 +466,7 @@
       "type": "component",
       "status": "implemented",
       "links": [
+        "adr-0007",
         "architecture",
         "quality"
       ],
@@ -552,8 +573,32 @@
       "to": "dependencies"
     },
     {
+      "from": "adr-0007",
+      "to": "authentication"
+    },
+    {
+      "from": "adr-0007",
+      "to": "api"
+    },
+    {
+      "from": "adr-0007",
+      "to": "schema"
+    },
+    {
+      "from": "adr-0007",
+      "to": "deployment"
+    },
+    {
+      "from": "adr-0007",
+      "to": "verification"
+    },
+    {
       "from": "index",
       "to": "architecture"
+    },
+    {
+      "from": "api",
+      "to": "adr-0007"
     },
     {
       "from": "api",
@@ -693,6 +738,10 @@
     },
     {
       "from": "authentication",
+      "to": "adr-0007"
+    },
+    {
+      "from": "authentication",
       "to": "architecture"
     },
     {
@@ -713,6 +762,10 @@
     },
     {
       "from": "capture",
+      "to": "adr-0007"
+    },
+    {
+      "from": "capture",
       "to": "architecture"
     },
     {
@@ -730,6 +783,10 @@
     {
       "from": "cigarette_smoking",
       "to": "dataset_cigarette_smoking"
+    },
+    {
+      "from": "dashboard",
+      "to": "adr-0007"
     },
     {
       "from": "dashboard",
@@ -841,6 +898,10 @@
     },
     {
       "from": "deployment",
+      "to": "adr-0007"
+    },
+    {
+      "from": "deployment",
       "to": "architecture"
     },
     {
@@ -937,6 +998,10 @@
     },
     {
       "from": "release_checks",
+      "to": "adr-0007"
+    },
+    {
+      "from": "release_checks",
       "to": "verification"
     },
     {
@@ -950,6 +1015,10 @@
     {
       "from": "review",
       "to": "verification"
+    },
+    {
+      "from": "schema",
+      "to": "adr-0007"
     },
     {
       "from": "schema",
@@ -974,6 +1043,10 @@
     {
       "from": "training",
       "to": "quality"
+    },
+    {
+      "from": "verification",
+      "to": "adr-0007"
     },
     {
       "from": "verification",

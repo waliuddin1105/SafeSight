@@ -2,7 +2,7 @@
 id: capture
 type: pipeline
 status: implemented
-links: [architecture, verification]
+links: [adr-0007, architecture, verification]
 ---
 # Capture
 
@@ -17,3 +17,5 @@ See the typed contracts and API routes for the concrete boundary. Configuration 
 ## Gotchas
 
 Synthetic checks establish software execution only. Follow docs/VERIFY.md for current verification limits.
+
+Protected image/video evidence and frame uploads retain cookie/CSRF access under Supabase-mediated sessions.

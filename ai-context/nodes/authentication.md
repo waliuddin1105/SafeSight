@@ -2,18 +2,8 @@
 id: authentication
 type: api
 status: implemented
-links: [architecture, verification]
+links: [adr-0007, architecture, verification]
 ---
 # Authentication
 
-## What and why
-
-Cookie sessions, CSRF-protected mutations, local reviewer/admin roles and bounded login attempts. Bootstrap users through Flask CLI. No built-in password or demo account.
-
-## Inputs and outputs
-
-See the typed contracts and API routes for the concrete boundary. Configuration comes from YAML/environment; errors remain visible to reviewers or operators.
-
-## Gotchas
-
-Synthetic checks establish software execution only. Follow docs/VERIFY.md for current verification limits.
+Supabase Auth owns credentials and session validation; Flask keeps opaque HttpOnly cookies and CSRF. Backend-only auth_sessions stores tokens, with serialized refresh and 30-second identity revalidation. grant-user binds an Auth UUID to a local role; no client-metadata roles, password_hash or create-user remain. See docs/SUPABASE.md.

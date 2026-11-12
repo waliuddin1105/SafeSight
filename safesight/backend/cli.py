@@ -1,26 +1,33 @@
-"""Explicit account administration commands."""
+"""Grant application roles to existing Supabase identities; no local passwords."""
 
-from __future__ import annotations
-
-
+from uuid import UUID
 import click
-from werkzeug.security import generate_password_hash
-
-from safesight.storage.schema import (
-    User,
-)
-
-
+from sqlalchemy import select
 from safesight.backend.context import sessions
+from safesight.storage.schema import User
 
 
-@click.command("create-user")
-@click.argument("username")
-@click.option("--password", prompt=True, hide_input=True, confirmation_prompt=True)
+@click.command("grant-user")
+@click.argument("supabase_id")
+@click.argument("email")
 @click.option("--role", type=click.Choice(["admin", "reviewer"]), default="reviewer")
-def create_user(username, password, role):
-    if len(password) < 12:
-        raise click.ClickException("Password needs at least 12 characters")
+@click.option("--disabled", is_flag=True, help="Disable application access without deleting review history")
+def grant_user(supabase_id: str, email: str, role: str, disabled: bool) -> None:
+    """Bind a dashboard Auth user UUID to an application role using trusted operator access."""
+    try:
+        subject = str(UUID(supabase_id))
+    except ValueError:
+        raise click.ClickException("Use the Auth user UUID from the Supabase dashboard") from None
+    email = email.strip().lower()
+    if "@" not in email or len(email) > 320:
+        raise click.ClickException("Provide a valid email address")
     with sessions.begin() as db:
-        db.add(User(username=username, password_hash=generate_password_hash(password), role=role))
-    click.echo("User created")
+        user = db.scalar(select(User).where(User.supabase_id == subject))
+        if user is None:
+            existing = db.scalar(select(User).where(User.username == email))
+            if existing is not None:
+                raise click.ClickException("Email already belongs to another profile; resolve the conflict explicitly")
+            user = User(supabase_id=subject, username=email)
+            db.add(user)
+        user.role, user.active = role, not disabled
+    click.echo("Updated SafeSight access; passwords and invites are managed in Supabase Auth")

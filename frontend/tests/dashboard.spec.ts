@@ -1,7 +1,7 @@
 import {test,expect} from '@playwright/test';
 test('sign in, empty register, filters and camera denial',async({page})=>{
   await page.goto('/');
-  await page.getByLabel('Username',{exact:true}).fill('admin');
+  await page.getByLabel('Email',{exact:true}).fill('admin@example.test');
   await page.getByLabel('Password',{exact:true}).fill('test-password-123');
   await page.getByRole('button',{name:'Sign in'}).click();
   await expect(page.getByRole('heading',{name:'Incident register'})).toBeVisible();
@@ -25,7 +25,7 @@ test('sign in, empty register, filters and camera denial',async({page})=>{
 
 test('successful browser capture and a fresh reconnect session',async({page})=>{
   await page.goto('/');
-  await page.getByLabel('Username',{exact:true}).fill('admin');
+  await page.getByLabel('Email',{exact:true}).fill('admin@example.test');
   await page.getByLabel('Password',{exact:true}).fill('test-password-123');
   await page.getByRole('button',{name:'Sign in'}).click();
   await expect(page.getByRole('heading',{name:'Incident register'})).toBeVisible();
@@ -62,7 +62,7 @@ test('review actions update the incident and show review history',async({page})=
     }
   });
   await page.goto('/');
-  await page.getByLabel('Username',{exact:true}).fill('admin');
+  await page.getByLabel('Email',{exact:true}).fill('admin@example.test');
   await page.getByLabel('Password',{exact:true}).fill('test-password-123');
   await page.getByRole('button',{name:'Sign in'}).click();
   await page.getByRole('button',{name:'Review',exact:true}).click();

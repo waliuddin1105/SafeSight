@@ -41,9 +41,10 @@ def settings() -> dict[str, Any]:
     value = read_yaml(os.getenv("SAFESIGHT_CONFIG", "configs/application.yaml"))
     for key in ("models_root", "media_root"):
         value[key] = resolve_path(os.getenv(key.upper(), value[key]))
-    value["database_url"] = os.getenv(
-        "DATABASE_URL", "postgresql+psycopg://safesight:safesight@localhost:5432/safesight"
-    )
+    value["database_url"] = os.getenv("DATABASE_URL", "")
+    value["supabase_url"] = os.getenv("SUPABASE_URL", "").rstrip("/")
+    value["supabase_publishable_key"] = os.getenv("SUPABASE_PUBLISHABLE_KEY", "")
+    value["migration_database_url"] = os.getenv("MIGRATION_DATABASE_URL") or value["database_url"]
     value["secret_key"] = os.getenv("SECRET_KEY", "")
     value["evaluation_mode"] = os.getenv("EVALUATION_MODE", str(value["evaluation_mode"])).lower() == "true"
     return value

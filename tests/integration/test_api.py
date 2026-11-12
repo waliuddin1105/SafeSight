@@ -6,7 +6,7 @@ import os
 from PIL import Image
 import pytest
 from sqlalchemy import select
-from werkzeug.security import generate_password_hash
+from tests.auth_fixture import FakeAuth, SUBJECT, EMAIL
 
 from safesight.backend.app import create_app
 from safesight.config import ROOT
@@ -26,16 +26,19 @@ def app(tmp_path):
         {
             "database_url": url,
             "secret_key": "test-secret-" * 5,
+            "supabase_url": "https://auth.example.test",
+            "supabase_publishable_key": "sb_publishable_fixture",
             "media_root": tmp_path / "media",
             "models_root": inference_fixtures(),
             "evaluation_mode": True,
         }
     )
+    app.extensions["supabase_auth"] = FakeAuth()
     engine = app.extensions["db_engine"]
     Base.metadata.drop_all(engine)
     Base.metadata.create_all(engine)
     with app.extensions["db_sessions"].begin() as db:
-        db.add(User(username="admin", password_hash=generate_password_hash("test-password-123"), role="admin"))
+        db.add(User(username=EMAIL, supabase_id=SUBJECT, role="admin"))
     yield app
     engine.dispose()
 
@@ -47,7 +50,7 @@ def test_auth_capture_incident_evidence_and_review(app, monkeypatch):
     assert client.post("/api/v1/auth/login", json={}).status_code == 403
     login = client.post(
         "/api/v1/auth/login",
-        json={"username": "admin", "password": "test-password-123"},
+        json={"email": EMAIL, "password": "test-password-123"},
         headers={"X-CSRF-Token": csrf},
     )
     assert login.status_code == 200
@@ -122,7 +125,7 @@ def test_uploaded_recording_runs_to_completion(app):
     token = client.get("/api/v1/auth/me").json["csrf_token"]
     login = client.post(
         "/api/v1/auth/login",
-        json={"username": "admin", "password": "test-password-123"},
+        json={"email": EMAIL, "password": "test-password-123"},
         headers={"X-CSRF-Token": token},
     )
     headers = {"X-CSRF-Token": login.json["csrf_token"]}

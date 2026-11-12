@@ -21,14 +21,15 @@ Copy-Item .env.example .env
 ```
 
 Set SECRET_KEY to a random value of at least 32 characters; set DATABASE_URL to your
-PostgreSQL database and credentials. Generate URL-safe secrets with:
+Supabase PostgreSQL connection (psycopg prefix and sslmode=require). Also set
+SUPABASE_URL and SUPABASE_PUBLISHABLE_KEY. See [Supabase setup](docs/SUPABASE.md). Generate session-signing secrets with:
 
 ```powershell
 python -c "import secrets; print(secrets.token_urlsafe(48))"
 ```
 
 The application fails clearly if its session secret is missing. Do not commit .env.
-For Compose, set POSTGRES_PASSWORD to a URL-safe random secret as well.
+Compose inherits the same hosted DATABASE_URL; no local PostgreSQL password is needed.
 
 For NVIDIA acceleration, install the matching CUDA variants **after** the root requirements:
 
@@ -104,7 +105,7 @@ must agree with the card. New frameworks require an adapter; supported model swa
 
 ```powershell
 python -m alembic upgrade head
-python -m flask --app safesight.backend.app:create_app create-user admin --role admin
+python -m flask --app safesight.backend.app:create_app grant-user AUTH_USER_UUID person@example.com --role admin
 Set-Location frontend
 npm ci
 npm run build
@@ -118,7 +119,8 @@ In a second activated terminal at the project root:
 python -m safesight.worker
 ```
 
-Open http://127.0.0.1:5000. Sign in, create a location and browser/upload source under
+First create/invite an Auth account in Supabase and grant its UUID application access.
+Open http://127.0.0.1:5000. Sign in using that email/password, create a location and browser/upload source under
 Workspace setup, then start capture or queue a recording. Browser camera access requires
 localhost or HTTPS and explicit permission. Audio is disabled. No models are ready until
 valid artifacts are present; the dashboard displays unavailable/evaluation states.
@@ -138,11 +140,11 @@ browser capture or RTSP with Compose. One live source is supported initially.
 
 ```powershell
 docker compose up --build -d
-docker compose run --rm api python -m flask --app safesight.backend.app:create_app create-user admin --role admin
+docker compose run --rm api python -m flask --app safesight.backend.app:create_app grant-user AUTH_USER_UUID person@example.com --role admin
 ```
 
-Compose starts PostgreSQL, migrations, API and worker. Models are mounted read-only; media
-and database use named volumes. It exposes the dashboard on localhost:5000. The image is
+Compose starts migrations, API and worker against Supabase PostgreSQL. Models are mounted read-only; media
+uses a named volume. It exposes the dashboard on localhost:5000. The image is
 CPU-first; GPU passthrough additionally requires a compatible NVIDIA container runtime and
 CUDA wheels in the image. Docker runtime has not been verified on this host.
 

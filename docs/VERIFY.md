@@ -1,4 +1,23 @@
 # M0-M7 verification record
+## Supabase database and authentication verification
+
+2026-11-12: 49 unit tests and nine PostgreSQL integration tests pass (58 total).
+Three browser acceptance tests pass using an explicit fake Supabase HTTP boundary.
+TypeScript/Vite production build, Ruff, context graph and release contracts pass.
+Local PostgreSQL migration 0002 -> 0003 -> 0002 -> 0003 passes; old password hashes
+cannot be restored by downgrade. No authentication test calls a real password grant.
+Tests cover refresh, serialized session handling, provider rejection/outage, preserving
+rotated tokens after identity-check outage, logout, disabled/unprovisioned profiles,
+reviewer permissions, CSRF, and existing camera/upload/incident/evidence flows.
+
+Hosted Supabase migrations were applied through 0003. Read-only checks confirm TLS
+to the pooler, absence of password_hash, session-table RLS, anonymous rejection and
+live application health. No SafeSight profiles are provisioned; a real invited user
+login/refresh/logout remains unverified. Public signup settings were not changed.
+SECRET_KEY remains required for opaque signed cookies. No tokens or secrets were
+printed. No training ran; Docker runtime and physical cameras remain unverified.
+
+
 ## Config and model-sharing cleanup verification
 
 2026-11-12: all 49 unit tests pass, including two model-transfer integrity tests

@@ -3,6 +3,7 @@ id: dashboard
 type: component
 status: implemented
 links:
+- adr-0007
 - architecture
 - quality
 ---
@@ -21,3 +22,5 @@ Input: REST polling and getUserMedia. Output: bounded JPEG requests, upload jobs
 A reconnect starts a new capture generation and invalidates old callbacks. Camera permission errors and offline workers are visible. Synthetic models remain labeled evaluation only.
 
 Incident rows and details show location. Camera loops stop on terminal session/source errors; old capture callbacks cannot cross reconnect generations. Browser review/history checks use explicit fixtures.
+
+Login uses invited Supabase email/password through Flask. Browser tokens/localStorage are unnecessary; 401 returns to login and stops local capture.
