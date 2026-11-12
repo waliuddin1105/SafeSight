@@ -25,9 +25,11 @@ if __name__ == "__main__":
             "supabase_publishable_key": "sb_publishable_fixture",
             "models_root": generate(),
             "evaluation_mode": True,
+            "minimum_free_bytes": 0,
         }
     )
     app.extensions["supabase_auth"] = FakeAuth()
+    Base.metadata.drop_all(app.extensions["db_engine"])
     Base.metadata.create_all(app.extensions["db_engine"])
     with app.extensions["db_sessions"].begin() as db:
         user = db.scalar(select(User).where(User.supabase_id == SUBJECT))
@@ -37,4 +39,19 @@ if __name__ == "__main__":
         user.role, user.active = "admin", True
         if not db.scalar(select(Location)):
             db.add(Location(name="Browser fixture location"))
+    import threading
+    from safesight.worker.__main__ import Worker
+
+    def run_worker():
+        worker = Worker(app.extensions["safesight"])
+        try:
+            import time
+
+            while True:
+                if not worker.tick():
+                    time.sleep(0.1)
+        finally:
+            worker.close()
+
+    threading.Thread(target=run_worker, daemon=True).start()
     serve(app, host="127.0.0.1", port=5000)

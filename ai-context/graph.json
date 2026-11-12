@@ -242,6 +242,7 @@
       "type": "component",
       "status": "implemented",
       "links": [
+        "video_testing",
         "adr-0007",
         "architecture",
         "quality"
@@ -521,6 +522,19 @@
         "quality"
       ],
       "path": "nodes/verification.md"
+    },
+    {
+      "id": "video_testing",
+      "type": "feature",
+      "status": "implemented",
+      "links": [
+        "dashboard",
+        "api",
+        "worker",
+        "quality",
+        "adr-0010"
+      ],
+      "path": "nodes/video_testing.md"
     },
     {
       "id": "worker",
@@ -905,6 +919,10 @@
     },
     {
       "from": "dashboard",
+      "to": "video_testing"
+    },
+    {
+      "from": "dashboard",
       "to": "adr-0007"
     },
     {
@@ -1210,6 +1228,26 @@
     {
       "from": "verification",
       "to": "quality"
+    },
+    {
+      "from": "video_testing",
+      "to": "dashboard"
+    },
+    {
+      "from": "video_testing",
+      "to": "api"
+    },
+    {
+      "from": "video_testing",
+      "to": "worker"
+    },
+    {
+      "from": "video_testing",
+      "to": "quality"
+    },
+    {
+      "from": "video_testing",
+      "to": "adr-0010"
     },
     {
       "from": "worker",

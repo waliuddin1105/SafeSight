@@ -73,3 +73,32 @@ test('review actions update the incident and show review history',async({page})=
   await page.getByRole('button',{name:'Close review'}).click();
   await expect(page.getByRole('table').getByText('confirmed',{exact:true})).toBeVisible();
 });
+
+
+test('uploaded footage uses selected models and exposes playback results',async({page})=>{
+  await page.goto('/');
+  await page.getByLabel('Email',{exact:true}).fill('admin@example.test');
+  await page.getByLabel('Password',{exact:true}).fill('test-password-123');
+  await page.getByRole('button',{name:'Sign in',exact:true}).click();
+  await expect(page.getByRole('heading',{name:'Incident register'})).toBeVisible();
+  const auth=await (await page.request.get('/api/v1/auth/me')).json();
+  const locations=await (await page.request.get('/api/v1/locations')).json();
+  const response=await page.request.post('/api/v1/sources',{headers:{'X-CSRF-Token':auth.csrf_token},data:{name:'Video workspace camera',location_id:locations.items[0].id,kind:'upload'}});
+  const source=await response.json();
+  await expect(page.getByLabel('Upload source').locator('option',{hasText:'Video workspace camera'})).toBeAttached({timeout:10000});
+  await page.getByLabel('Upload source').selectOption(source.id);
+  await page.getByRole('group',{name:'Models to test'}).getByRole('checkbox',{name:'Fire & smoke',exact:true}).check();
+  await page.getByRole('checkbox',{name:'Allow evaluation-only models'}).check();
+  await page.getByLabel('Video recording',{exact:true}).setInputFiles('../tests/fixtures/datasets/phone_usage/videos/test/evaluation_0.mp4');
+  await page.getByRole('button',{name:'Queue recording',exact:true}).click();
+  await expect(page.getByLabel('Processing progress')).toBeVisible();
+  await expect(page.getByRole('heading',{name:'completed',exact:true})).toBeVisible({timeout:30000});
+  await expect(page.getByRole('heading',{name:'Alert timeline'})).toBeVisible();
+  await expect(page.getByText('Evaluation testing: these results are not qualified for production.')).toBeVisible();
+  await expect(page.locator('.video-stage video')).toHaveAttribute('src',/\/api\/v1\/jobs\/.+\/video/);
+  const jobs=await (await page.request.get('/api/v1/jobs')).json();
+  const details=await (await page.request.get('/api/v1/jobs/'+jobs.items[0].id)).json();
+  expect(Object.keys(details.snapshot.cards)).toEqual(['fire_smoke']);
+  await page.reload();
+  await expect(page.locator('.job-history button').first()).toBeVisible();
+});
