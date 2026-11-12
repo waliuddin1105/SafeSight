@@ -28,3 +28,5 @@ The app factory registers resource blueprints in backend/routes. Security, reque
 Login now accepts email/password through Supabase; protected media and API calls retain same-origin cookies/CSRF. Logout destroys backend tokens even during provider outages.
 
 Jobs history/cancel/video/predictions/incidents/metrics and model-version listing are implemented. OpenAPI is generated and served at the authenticated /api/v1/openapi.json endpoint.
+
+OpenAPI now documents optional event ground truth and public job schemas; private session/credential tables remain excluded.

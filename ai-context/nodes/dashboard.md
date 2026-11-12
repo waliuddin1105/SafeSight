@@ -27,3 +27,5 @@ Incident rows and details show location. Camera loops stop on terminal session/s
 Login uses invited Supabase email/password through Flask. Browser tokens/localStorage are unnecessary; 401 returns to login and stops local capture.
 
 Typed API/auth/capture/incidents/setup/testing modules replace the monolithic component. Polling rejects stale responses; dates use configured timezone, and review dialogs trap/restore focus.
+
+Dashboard modules are formatted and distinguish collection responses from paginated lists. Optional supplied-ground-truth metrics are displayed separately from detection scores.

@@ -80,7 +80,8 @@ def build(app) -> dict:
                 },
             }
             segment = path.split("/")[3]
-            if segment in resources and method == "GET" and not path.endswith(("/video", "/predictions", "/incidents")):
+            segment = {"jobs": "processing_jobs"}.get(segment, segment)
+            if segment in resources and method == "GET" and len(path.split("/")) <= 5:
                 schema = {"$ref": f"#/components/schemas/{segment}"}
                 if not rule.arguments:
                     schema = {
@@ -124,6 +125,7 @@ def build(app) -> dict:
                                     },
                                     "evaluation": {"type": "boolean"},
                                     "captured_at": {"type": "string", "format": "date-time"},
+                                    "ground_truth": {"type": "string", "description": "Optional JSON object with events: slug, subtype, start/end seconds and normalized xyxy box"},
                                 },
                             }
                         }

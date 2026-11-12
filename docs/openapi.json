@@ -717,6 +717,24 @@
         "parameters": [],
         "responses": {
           "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "items": {
+                      "items": {
+                        "$ref": "#/components/schemas/incidents"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "required": [
+                    "items"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
             "description": "Successful response"
           },
           "400": {
@@ -837,6 +855,24 @@
         "parameters": [],
         "responses": {
           "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "items": {
+                      "items": {
+                        "$ref": "#/components/schemas/processing_jobs"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "required": [
+                    "items"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
             "description": "Successful response"
           },
           "400": {
@@ -875,6 +911,13 @@
         ],
         "responses": {
           "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/processing_jobs"
+                }
+              }
+            },
             "description": "Successful response"
           },
           "400": {
@@ -1514,6 +1557,10 @@
                   },
                   "file": {
                     "format": "binary",
+                    "type": "string"
+                  },
+                  "ground_truth": {
+                    "description": "Optional JSON object with events: slug, subtype, start/end seconds and normalized xyxy box",
                     "type": "string"
                   },
                   "models": {
