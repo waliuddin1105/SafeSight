@@ -1,0 +1,995 @@
+{
+  "schema_version": 1,
+  "nodes": [
+    {
+      "id": "adr-0001",
+      "type": "decision",
+      "status": "accepted",
+      "links": [
+        "architecture",
+        "dependencies",
+        "quality"
+      ],
+      "path": "decisions/0001-approved-architecture.md"
+    },
+    {
+      "id": "adr-0002",
+      "type": "decision",
+      "status": "accepted",
+      "links": [
+        "dependencies",
+        "worker",
+        "evidence",
+        "verification"
+      ],
+      "path": "decisions/0002-cpu-pins-and-worker-recovery.md"
+    },
+    {
+      "id": "adr-0003",
+      "type": "decision",
+      "status": "accepted",
+      "links": [
+        "architecture",
+        "recovery",
+        "fusion_calibration",
+        "quality",
+        "preprocessing",
+        "verification"
+      ],
+      "path": "decisions/0003-complete-runtime-contracts.md"
+    },
+    {
+      "id": "adr-0004",
+      "type": "decision",
+      "status": "accepted",
+      "links": [
+        "dataset_preparation",
+        "dataset_sourcing",
+        "quality"
+      ],
+      "path": "decisions/0004-portable-dataset-preparation.md"
+    },
+    {
+      "id": "adr-0005",
+      "type": "decision",
+      "status": "accepted",
+      "links": [
+        "datasets",
+        "training",
+        "api"
+      ],
+      "path": "decisions/0005-runtime-splits-and-backend-boundaries.md"
+    },
+    {
+      "id": "adr-0006",
+      "type": "decision",
+      "status": "accepted",
+      "links": [
+        "training",
+        "artifacts",
+        "dependencies"
+      ],
+      "path": "decisions/0006-training-configs-and-model-sharing.md"
+    },
+    {
+      "id": "index",
+      "type": "index",
+      "status": "implemented",
+      "links": [
+        "architecture"
+      ],
+      "path": "INDEX.md"
+    },
+    {
+      "id": "api",
+      "type": "api",
+      "status": "implemented",
+      "links": [
+        "adr-0005",
+        "architecture",
+        "quality"
+      ],
+      "path": "nodes/api.md"
+    },
+    {
+      "id": "architecture",
+      "type": "architecture",
+      "status": "implemented",
+      "links": [
+        "datasets",
+        "training",
+        "inference",
+        "api",
+        "schema",
+        "dashboard",
+        "dependencies",
+        "deployment",
+        "verification",
+        "body_state",
+        "phone_usage",
+        "cigarette_smoking",
+        "entrance_guard",
+        "fire_smoke",
+        "adr-0001",
+        "authentication",
+        "evidence",
+        "capture",
+        "worker",
+        "review",
+        "artifacts",
+        "adr-0002",
+        "recovery",
+        "fusion_calibration",
+        "detection_metrics",
+        "preprocessing",
+        "release_checks",
+        "adr-0003"
+      ],
+      "path": "nodes/architecture.md"
+    },
+    {
+      "id": "artifacts",
+      "type": "component",
+      "status": "implemented",
+      "links": [
+        "adr-0006",
+        "architecture",
+        "verification"
+      ],
+      "path": "nodes/artifacts.md"
+    },
+    {
+      "id": "authentication",
+      "type": "api",
+      "status": "implemented",
+      "links": [
+        "architecture",
+        "verification"
+      ],
+      "path": "nodes/authentication.md"
+    },
+    {
+      "id": "body_state",
+      "type": "use_case",
+      "status": "implemented",
+      "links": [
+        "architecture",
+        "quality",
+        "dataset_body_state"
+      ],
+      "path": "nodes/body_state.md"
+    },
+    {
+      "id": "capture",
+      "type": "pipeline",
+      "status": "implemented",
+      "links": [
+        "architecture",
+        "verification"
+      ],
+      "path": "nodes/capture.md"
+    },
+    {
+      "id": "cigarette_smoking",
+      "type": "use_case",
+      "status": "implemented",
+      "links": [
+        "architecture",
+        "quality",
+        "dataset_cigarette_smoking"
+      ],
+      "path": "nodes/cigarette_smoking.md"
+    },
+    {
+      "id": "dashboard",
+      "type": "component",
+      "status": "implemented",
+      "links": [
+        "architecture",
+        "quality"
+      ],
+      "path": "nodes/dashboard.md"
+    },
+    {
+      "id": "dataset_body_state",
+      "type": "dataset",
+      "status": "implemented",
+      "links": [
+        "datasets",
+        "body_state"
+      ],
+      "path": "nodes/dataset_body_state.md"
+    },
+    {
+      "id": "dataset_cigarette_smoking",
+      "type": "dataset",
+      "status": "implemented",
+      "links": [
+        "datasets",
+        "cigarette_smoking"
+      ],
+      "path": "nodes/dataset_cigarette_smoking.md"
+    },
+    {
+      "id": "dataset_entrance_guard",
+      "type": "dataset",
+      "status": "implemented",
+      "links": [
+        "datasets",
+        "entrance_guard"
+      ],
+      "path": "nodes/dataset_entrance_guard.md"
+    },
+    {
+      "id": "dataset_fire_smoke",
+      "type": "dataset",
+      "status": "implemented",
+      "links": [
+        "datasets",
+        "fire_smoke"
+      ],
+      "path": "nodes/dataset_fire_smoke.md"
+    },
+    {
+      "id": "dataset_phone_usage",
+      "type": "dataset",
+      "status": "implemented",
+      "links": [
+        "datasets",
+        "phone_usage"
+      ],
+      "path": "nodes/dataset_phone_usage.md"
+    },
+    {
+      "id": "dataset_preparation",
+      "type": "pipeline",
+      "status": "implemented",
+      "links": [
+        "adr-0005",
+        "datasets",
+        "dataset_sourcing",
+        "training",
+        "quality",
+        "adr-0004"
+      ],
+      "path": "nodes/dataset_preparation.md"
+    },
+    {
+      "id": "dataset_sourcing",
+      "type": "dataset",
+      "status": "researching",
+      "links": [
+        "datasets",
+        "quality"
+      ],
+      "path": "nodes/dataset_sourcing.md"
+    },
+    {
+      "id": "datasets",
+      "type": "dataset",
+      "status": "implemented",
+      "links": [
+        "adr-0005",
+        "architecture",
+        "quality",
+        "dataset_sourcing",
+        "dataset_preparation"
+      ],
+      "path": "nodes/datasets.md"
+    },
+    {
+      "id": "dependencies",
+      "type": "component",
+      "status": "implemented",
+      "links": [
+        "architecture",
+        "quality"
+      ],
+      "path": "nodes/dependencies.md"
+    },
+    {
+      "id": "deployment",
+      "type": "component",
+      "status": "implemented",
+      "links": [
+        "architecture",
+        "quality"
+      ],
+      "path": "nodes/deployment.md"
+    },
+    {
+      "id": "detection_metrics",
+      "type": "component",
+      "status": "implemented",
+      "links": [
+        "training",
+        "architecture"
+      ],
+      "path": "nodes/detection_metrics.md"
+    },
+    {
+      "id": "entrance_guard",
+      "type": "use_case",
+      "status": "implemented",
+      "links": [
+        "architecture",
+        "quality",
+        "dataset_entrance_guard"
+      ],
+      "path": "nodes/entrance_guard.md"
+    },
+    {
+      "id": "evidence",
+      "type": "component",
+      "status": "implemented",
+      "links": [
+        "architecture",
+        "verification"
+      ],
+      "path": "nodes/evidence.md"
+    },
+    {
+      "id": "fire_smoke",
+      "type": "use_case",
+      "status": "implemented",
+      "links": [
+        "architecture",
+        "quality",
+        "dataset_fire_smoke"
+      ],
+      "path": "nodes/fire_smoke.md"
+    },
+    {
+      "id": "fusion_calibration",
+      "type": "pipeline",
+      "status": "implemented",
+      "links": [
+        "quality",
+        "architecture"
+      ],
+      "path": "nodes/fusion_calibration.md"
+    },
+    {
+      "id": "inference",
+      "type": "pipeline",
+      "status": "implemented",
+      "links": [
+        "architecture",
+        "quality"
+      ],
+      "path": "nodes/inference.md"
+    },
+    {
+      "id": "phone_usage",
+      "type": "use_case",
+      "status": "implemented",
+      "links": [
+        "architecture",
+        "quality",
+        "dataset_phone_usage"
+      ],
+      "path": "nodes/phone_usage.md"
+    },
+    {
+      "id": "preprocessing",
+      "type": "component",
+      "status": "implemented",
+      "links": [
+        "inference",
+        "architecture"
+      ],
+      "path": "nodes/preprocessing.md"
+    },
+    {
+      "id": "quality",
+      "type": "component",
+      "status": "implemented",
+      "links": [
+        "architecture"
+      ],
+      "path": "nodes/quality.md"
+    },
+    {
+      "id": "recovery",
+      "type": "pipeline",
+      "status": "implemented",
+      "links": [
+        "worker",
+        "architecture"
+      ],
+      "path": "nodes/recovery.md"
+    },
+    {
+      "id": "release_checks",
+      "type": "component",
+      "status": "implemented",
+      "links": [
+        "verification",
+        "architecture"
+      ],
+      "path": "nodes/release_checks.md"
+    },
+    {
+      "id": "review",
+      "type": "feature",
+      "status": "implemented",
+      "links": [
+        "architecture",
+        "verification"
+      ],
+      "path": "nodes/review.md"
+    },
+    {
+      "id": "schema",
+      "type": "schema",
+      "status": "implemented",
+      "links": [
+        "architecture",
+        "quality"
+      ],
+      "path": "nodes/schema.md"
+    },
+    {
+      "id": "training",
+      "type": "pipeline",
+      "status": "implemented",
+      "links": [
+        "adr-0006",
+        "adr-0005",
+        "architecture",
+        "quality"
+      ],
+      "path": "nodes/training.md"
+    },
+    {
+      "id": "verification",
+      "type": "component",
+      "status": "implemented",
+      "links": [
+        "architecture",
+        "quality"
+      ],
+      "path": "nodes/verification.md"
+    },
+    {
+      "id": "worker",
+      "type": "component",
+      "status": "implemented",
+      "links": [
+        "architecture",
+        "verification"
+      ],
+      "path": "nodes/worker.md"
+    }
+  ],
+  "edges": [
+    {
+      "from": "adr-0001",
+      "to": "architecture"
+    },
+    {
+      "from": "adr-0001",
+      "to": "dependencies"
+    },
+    {
+      "from": "adr-0001",
+      "to": "quality"
+    },
+    {
+      "from": "adr-0002",
+      "to": "dependencies"
+    },
+    {
+      "from": "adr-0002",
+      "to": "worker"
+    },
+    {
+      "from": "adr-0002",
+      "to": "evidence"
+    },
+    {
+      "from": "adr-0002",
+      "to": "verification"
+    },
+    {
+      "from": "adr-0003",
+      "to": "architecture"
+    },
+    {
+      "from": "adr-0003",
+      "to": "recovery"
+    },
+    {
+      "from": "adr-0003",
+      "to": "fusion_calibration"
+    },
+    {
+      "from": "adr-0003",
+      "to": "quality"
+    },
+    {
+      "from": "adr-0003",
+      "to": "preprocessing"
+    },
+    {
+      "from": "adr-0003",
+      "to": "verification"
+    },
+    {
+      "from": "adr-0004",
+      "to": "dataset_preparation"
+    },
+    {
+      "from": "adr-0004",
+      "to": "dataset_sourcing"
+    },
+    {
+      "from": "adr-0004",
+      "to": "quality"
+    },
+    {
+      "from": "adr-0005",
+      "to": "datasets"
+    },
+    {
+      "from": "adr-0005",
+      "to": "training"
+    },
+    {
+      "from": "adr-0005",
+      "to": "api"
+    },
+    {
+      "from": "adr-0006",
+      "to": "training"
+    },
+    {
+      "from": "adr-0006",
+      "to": "artifacts"
+    },
+    {
+      "from": "adr-0006",
+      "to": "dependencies"
+    },
+    {
+      "from": "index",
+      "to": "architecture"
+    },
+    {
+      "from": "api",
+      "to": "adr-0005"
+    },
+    {
+      "from": "api",
+      "to": "architecture"
+    },
+    {
+      "from": "api",
+      "to": "quality"
+    },
+    {
+      "from": "architecture",
+      "to": "datasets"
+    },
+    {
+      "from": "architecture",
+      "to": "training"
+    },
+    {
+      "from": "architecture",
+      "to": "inference"
+    },
+    {
+      "from": "architecture",
+      "to": "api"
+    },
+    {
+      "from": "architecture",
+      "to": "schema"
+    },
+    {
+      "from": "architecture",
+      "to": "dashboard"
+    },
+    {
+      "from": "architecture",
+      "to": "dependencies"
+    },
+    {
+      "from": "architecture",
+      "to": "deployment"
+    },
+    {
+      "from": "architecture",
+      "to": "verification"
+    },
+    {
+      "from": "architecture",
+      "to": "body_state"
+    },
+    {
+      "from": "architecture",
+      "to": "phone_usage"
+    },
+    {
+      "from": "architecture",
+      "to": "cigarette_smoking"
+    },
+    {
+      "from": "architecture",
+      "to": "entrance_guard"
+    },
+    {
+      "from": "architecture",
+      "to": "fire_smoke"
+    },
+    {
+      "from": "architecture",
+      "to": "adr-0001"
+    },
+    {
+      "from": "architecture",
+      "to": "authentication"
+    },
+    {
+      "from": "architecture",
+      "to": "evidence"
+    },
+    {
+      "from": "architecture",
+      "to": "capture"
+    },
+    {
+      "from": "architecture",
+      "to": "worker"
+    },
+    {
+      "from": "architecture",
+      "to": "review"
+    },
+    {
+      "from": "architecture",
+      "to": "artifacts"
+    },
+    {
+      "from": "architecture",
+      "to": "adr-0002"
+    },
+    {
+      "from": "architecture",
+      "to": "recovery"
+    },
+    {
+      "from": "architecture",
+      "to": "fusion_calibration"
+    },
+    {
+      "from": "architecture",
+      "to": "detection_metrics"
+    },
+    {
+      "from": "architecture",
+      "to": "preprocessing"
+    },
+    {
+      "from": "architecture",
+      "to": "release_checks"
+    },
+    {
+      "from": "architecture",
+      "to": "adr-0003"
+    },
+    {
+      "from": "artifacts",
+      "to": "adr-0006"
+    },
+    {
+      "from": "artifacts",
+      "to": "architecture"
+    },
+    {
+      "from": "artifacts",
+      "to": "verification"
+    },
+    {
+      "from": "authentication",
+      "to": "architecture"
+    },
+    {
+      "from": "authentication",
+      "to": "verification"
+    },
+    {
+      "from": "body_state",
+      "to": "architecture"
+    },
+    {
+      "from": "body_state",
+      "to": "quality"
+    },
+    {
+      "from": "body_state",
+      "to": "dataset_body_state"
+    },
+    {
+      "from": "capture",
+      "to": "architecture"
+    },
+    {
+      "from": "capture",
+      "to": "verification"
+    },
+    {
+      "from": "cigarette_smoking",
+      "to": "architecture"
+    },
+    {
+      "from": "cigarette_smoking",
+      "to": "quality"
+    },
+    {
+      "from": "cigarette_smoking",
+      "to": "dataset_cigarette_smoking"
+    },
+    {
+      "from": "dashboard",
+      "to": "architecture"
+    },
+    {
+      "from": "dashboard",
+      "to": "quality"
+    },
+    {
+      "from": "dataset_body_state",
+      "to": "datasets"
+    },
+    {
+      "from": "dataset_body_state",
+      "to": "body_state"
+    },
+    {
+      "from": "dataset_cigarette_smoking",
+      "to": "datasets"
+    },
+    {
+      "from": "dataset_cigarette_smoking",
+      "to": "cigarette_smoking"
+    },
+    {
+      "from": "dataset_entrance_guard",
+      "to": "datasets"
+    },
+    {
+      "from": "dataset_entrance_guard",
+      "to": "entrance_guard"
+    },
+    {
+      "from": "dataset_fire_smoke",
+      "to": "datasets"
+    },
+    {
+      "from": "dataset_fire_smoke",
+      "to": "fire_smoke"
+    },
+    {
+      "from": "dataset_phone_usage",
+      "to": "datasets"
+    },
+    {
+      "from": "dataset_phone_usage",
+      "to": "phone_usage"
+    },
+    {
+      "from": "dataset_preparation",
+      "to": "adr-0005"
+    },
+    {
+      "from": "dataset_preparation",
+      "to": "datasets"
+    },
+    {
+      "from": "dataset_preparation",
+      "to": "dataset_sourcing"
+    },
+    {
+      "from": "dataset_preparation",
+      "to": "training"
+    },
+    {
+      "from": "dataset_preparation",
+      "to": "quality"
+    },
+    {
+      "from": "dataset_preparation",
+      "to": "adr-0004"
+    },
+    {
+      "from": "dataset_sourcing",
+      "to": "datasets"
+    },
+    {
+      "from": "dataset_sourcing",
+      "to": "quality"
+    },
+    {
+      "from": "datasets",
+      "to": "adr-0005"
+    },
+    {
+      "from": "datasets",
+      "to": "architecture"
+    },
+    {
+      "from": "datasets",
+      "to": "quality"
+    },
+    {
+      "from": "datasets",
+      "to": "dataset_sourcing"
+    },
+    {
+      "from": "datasets",
+      "to": "dataset_preparation"
+    },
+    {
+      "from": "dependencies",
+      "to": "architecture"
+    },
+    {
+      "from": "dependencies",
+      "to": "quality"
+    },
+    {
+      "from": "deployment",
+      "to": "architecture"
+    },
+    {
+      "from": "deployment",
+      "to": "quality"
+    },
+    {
+      "from": "detection_metrics",
+      "to": "training"
+    },
+    {
+      "from": "detection_metrics",
+      "to": "architecture"
+    },
+    {
+      "from": "entrance_guard",
+      "to": "architecture"
+    },
+    {
+      "from": "entrance_guard",
+      "to": "quality"
+    },
+    {
+      "from": "entrance_guard",
+      "to": "dataset_entrance_guard"
+    },
+    {
+      "from": "evidence",
+      "to": "architecture"
+    },
+    {
+      "from": "evidence",
+      "to": "verification"
+    },
+    {
+      "from": "fire_smoke",
+      "to": "architecture"
+    },
+    {
+      "from": "fire_smoke",
+      "to": "quality"
+    },
+    {
+      "from": "fire_smoke",
+      "to": "dataset_fire_smoke"
+    },
+    {
+      "from": "fusion_calibration",
+      "to": "quality"
+    },
+    {
+      "from": "fusion_calibration",
+      "to": "architecture"
+    },
+    {
+      "from": "inference",
+      "to": "architecture"
+    },
+    {
+      "from": "inference",
+      "to": "quality"
+    },
+    {
+      "from": "phone_usage",
+      "to": "architecture"
+    },
+    {
+      "from": "phone_usage",
+      "to": "quality"
+    },
+    {
+      "from": "phone_usage",
+      "to": "dataset_phone_usage"
+    },
+    {
+      "from": "preprocessing",
+      "to": "inference"
+    },
+    {
+      "from": "preprocessing",
+      "to": "architecture"
+    },
+    {
+      "from": "quality",
+      "to": "architecture"
+    },
+    {
+      "from": "recovery",
+      "to": "worker"
+    },
+    {
+      "from": "recovery",
+      "to": "architecture"
+    },
+    {
+      "from": "release_checks",
+      "to": "verification"
+    },
+    {
+      "from": "release_checks",
+      "to": "architecture"
+    },
+    {
+      "from": "review",
+      "to": "architecture"
+    },
+    {
+      "from": "review",
+      "to": "verification"
+    },
+    {
+      "from": "schema",
+      "to": "architecture"
+    },
+    {
+      "from": "schema",
+      "to": "quality"
+    },
+    {
+      "from": "training",
+      "to": "adr-0006"
+    },
+    {
+      "from": "training",
+      "to": "adr-0005"
+    },
+    {
+      "from": "training",
+      "to": "architecture"
+    },
+    {
+      "from": "training",
+      "to": "quality"
+    },
+    {
+      "from": "verification",
+      "to": "architecture"
+    },
+    {
+      "from": "verification",
+      "to": "quality"
+    },
+    {
+      "from": "worker",
+      "to": "architecture"
+    },
+    {
+      "from": "worker",
+      "to": "verification"
+    }
+  ]
+}
