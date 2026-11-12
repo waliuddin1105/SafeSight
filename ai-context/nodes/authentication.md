@@ -2,7 +2,7 @@
 id: authentication
 type: api
 status: implemented
-links: [adr-0010, adr-0007, architecture, verification]
+links: [operations, adr-0010, adr-0007, architecture, verification]
 ---
 # Authentication
 

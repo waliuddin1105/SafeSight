@@ -196,6 +196,7 @@
       "type": "api",
       "status": "implemented",
       "links": [
+        "operations",
         "adr-0010",
         "adr-0007",
         "architecture",
@@ -352,6 +353,7 @@
       "type": "component",
       "status": "implemented",
       "links": [
+        "operations",
         "adr-0007",
         "architecture",
         "quality"
@@ -421,6 +423,18 @@
         "quality"
       ],
       "path": "nodes/inference.md"
+    },
+    {
+      "id": "operations",
+      "type": "component",
+      "status": "implemented",
+      "links": [
+        "deployment",
+        "authentication",
+        "schema",
+        "verification"
+      ],
+      "path": "nodes/operations.md"
     },
     {
       "id": "phone_usage",
@@ -863,6 +877,10 @@
     },
     {
       "from": "authentication",
+      "to": "operations"
+    },
+    {
+      "from": "authentication",
       "to": "adr-0010"
     },
     {
@@ -1039,6 +1057,10 @@
     },
     {
       "from": "deployment",
+      "to": "operations"
+    },
+    {
+      "from": "deployment",
       "to": "adr-0007"
     },
     {
@@ -1112,6 +1134,22 @@
     {
       "from": "inference",
       "to": "quality"
+    },
+    {
+      "from": "operations",
+      "to": "deployment"
+    },
+    {
+      "from": "operations",
+      "to": "authentication"
+    },
+    {
+      "from": "operations",
+      "to": "schema"
+    },
+    {
+      "from": "operations",
+      "to": "verification"
     },
     {
       "from": "phone_usage",

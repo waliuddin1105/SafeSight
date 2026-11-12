@@ -89,3 +89,7 @@ no demo account is created and no passwords should be pasted into chat.
 References: [Auth API](https://github.com/supabase/auth/blob/master/openapi.yaml),
 [server-side sessions](https://supabase.com/docs/guides/auth/server-side/advanced-guide),
 [database connections](https://supabase.com/docs/guides/database/connecting-to-postgres).
+
+## Operational update
+
+Migration 0004, shared login limits, diagnostics and explicit default-admin provisioning are documented in [operations](OPERATIONS.md). Runtime login still uses the publishable key; the optional secret key is used only for the explicitly invoked bootstrap tool. The initial unprovisioned-user verification limit is superseded by the current verification record.

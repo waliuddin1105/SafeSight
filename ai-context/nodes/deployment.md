@@ -3,6 +3,7 @@ id: deployment
 type: component
 status: implemented
 links:
+- operations
 - adr-0007
 - architecture
 - quality
