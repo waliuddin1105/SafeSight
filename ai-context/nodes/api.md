@@ -32,3 +32,5 @@ Jobs history/cancel/video/predictions/incidents/metrics and model-version listin
 OpenAPI now documents optional event ground truth and public job schemas; private session/credential tables remain excluded.
 
 The frontend API client handles empty/non-JSON proxy errors and HTTP no-content responses explicitly. Initial backend connection failures are shown on sign-in; login refreshes the CSRF token before retrying after server restart.
+
+Vite development proxy explicitly preserves the browser-facing Host (changeOrigin=false), allowing Flask to enforce matching Origin/Host without weakening CSRF protection.

@@ -1,7 +1,7 @@
 # M0-M7 verification record
 ## Empty API response recovery
 
-Six frontend response tests pass for empty proxy failures, HTML gateway errors, JSON errors, 401 expiry, 204/empty-200 handling and network/abort errors. TypeScript/Vite build passes. The backend was stopped while Vite was serving; it was restarted. Real Supabase login through Vite was verified after an injected empty initial response, including CSRF recovery and logout.
+Six frontend response tests pass for empty proxy failures, HTML gateway errors, JSON errors, 401 expiry, 204/empty-200 handling and network/abort errors. TypeScript/Vite build passes. The backend was stopped while Vite was serving; it was restarted. The user confirmed successful sign-in through Vite after its proxy was changed to preserve the browser-facing Host. Login re-fetches CSRF after backend restart; origin and CSRF checks remain enabled.
 
 ## Approved P1-P8 improvement verification
 
