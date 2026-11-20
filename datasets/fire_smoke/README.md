@@ -11,9 +11,11 @@ describe the generated format and remain accepted for existing datasets.
 
 ## Classes
 
-- 0: fire
-- 1: smoke
-- 2: person
+- 0: smoke
+- 1: fire
+
+Person context is not part of this detector; it comes from the pose context asset and
+from other tasks' person detections at inference time.
 
 ## Required layout
 
@@ -47,7 +49,7 @@ One JSON object per line in manifest.jsonl:
 
 ## Labels
 
-Each line: zero-based class_id x_center y_center width height, normalized to [0,1]. Positive width/height; box entirely inside image. A verified negative has an explicit empty .txt; missing labels are errors. Label every visible target, including people.
+Each line: zero-based class_id x_center y_center width height, normalized to [0,1]. Positive width/height; box entirely inside image. A verified negative has an explicit empty .txt; missing labels are errors. Label every visible fire and smoke target.
 
 ```text
 0 0.5 0.5 0.4 0.8
@@ -61,9 +63,8 @@ train: images/train
 val: images/val
 test: images/test
 names:
-  0: fire
-  1: smoke
-  2: person
+  0: smoke
+  1: fire
 ```
 
 ## Event evaluation

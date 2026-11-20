@@ -123,6 +123,18 @@
       "path": "decisions/0010-pinned-recordings-and-worker-boundaries.md"
     },
     {
+      "id": "adr-0011",
+      "type": "decision",
+      "status": "accepted",
+      "links": [
+        "fire_smoke",
+        "dataset_fire_smoke",
+        "quality",
+        "verification"
+      ],
+      "path": "decisions/0011-two-class-fire-smoke.md"
+    },
+    {
       "id": "index",
       "type": "index",
       "status": "implemented",
@@ -399,7 +411,8 @@
       "links": [
         "architecture",
         "quality",
-        "dataset_fire_smoke"
+        "dataset_fire_smoke",
+        "adr-0011"
       ],
       "path": "nodes/fire_smoke.md"
     },
@@ -726,6 +739,22 @@
     {
       "from": "adr-0010",
       "to": "authentication"
+    },
+    {
+      "from": "adr-0011",
+      "to": "fire_smoke"
+    },
+    {
+      "from": "adr-0011",
+      "to": "dataset_fire_smoke"
+    },
+    {
+      "from": "adr-0011",
+      "to": "quality"
+    },
+    {
+      "from": "adr-0011",
+      "to": "verification"
     },
     {
       "from": "index",
@@ -1114,6 +1143,10 @@
     {
       "from": "fire_smoke",
       "to": "dataset_fire_smoke"
+    },
+    {
+      "from": "fire_smoke",
+      "to": "adr-0011"
     },
     {
       "from": "fusion_calibration",

@@ -10,7 +10,7 @@ CLASSES = {
     "phone_usage": ["person", "phone"],
     "cigarette_smoking": ["person", "cigarette", "lighter", "smoke"],
     "entrance_guard": ["verified_entry", "unverified_entry", "no_entry", "indeterminate"],
-    "fire_smoke": ["fire", "smoke", "person"],
+    "fire_smoke": ["smoke", "fire"],
 }
 SLUGS = tuple(CLASSES)
 YOLO_SLUGS = ("phone_usage", "cigarette_smoking", "fire_smoke")

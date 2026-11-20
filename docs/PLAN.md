@@ -46,7 +46,7 @@ held-out videos. Annotation intervals and actor visibility must be explicit.
 | phone_usage | person, phone | YOLO11s 960; fallback YOLO11n. >=3000 images; phone instances train/val/test >=500/100/100; >=20% hard negatives. Events distinguish using/carrying/nearby phones. |
 | cigarette_smoking | person, cigarette, lighter, smoke | Independent YOLO11s 1280; fallback YOLO11n. >=4000 images; each object >=700/150/150 instances; >=50 hidden-cigarette smoking events in each val/test split. |
 | entrance_guard | verified_entry, unverified_entry, no_entry, indeterminate | Frozen pretrained MobileNetV3-Small -> 2-layer LSTM hidden 128 dropout .3; fallback ResNet18 encoder. >=300 clips/class, >=50/class val and test, >=10 actor pairs, >=30 sessions. |
-| fire_smoke | fire, smoke, person | Independent YOLO11s 640; fallback YOLO11n. >=3000 images; fire/smoke each >=500/100/100 instances; >=25% hard negatives. Smoke boxes describe appearance; event labels describe source. |
+| fire_smoke | smoke, fire | Independent YOLO11s 640; fallback YOLO11n. >=3000 images; fire/smoke each >=500/100/100 instances; >=25% hard negatives. Smoke boxes describe appearance; event labels describe source. |
 
 Counts are recommendations, not accuracy guarantees. Every class must occur in each split.
 Entrance clips span up to 20 seconds at 5 FPS, 100 frames, aspect-preserving 224x224 input,

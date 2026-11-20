@@ -8,7 +8,8 @@ links: [datasets, fire_smoke]
 
 ## What and why
 
-This dataset belongs only to fire_smoke. Classes in order: fire, smoke, person.
+This dataset belongs only to fire_smoke. Classes in order: smoke, fire. Person context is
+supplied by the pose context asset and other tasks' detections at inference time.
 
 ## Inputs and outputs
 
