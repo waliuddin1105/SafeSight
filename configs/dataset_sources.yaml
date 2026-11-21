@@ -54,6 +54,6 @@ sources:
     url_env: DFIRE_ARCHIVE_URL
     estimated_archive_gb: 5
     annotation_gaps:
-      - The fire/smoke export has no person class; complete required person annotations.
+      - Verify that class IDs follow the project contract exactly: smoke=0 and fire=1.
       - Audit original video/scene partitions and upstream image terms.
       - Supply fire, hazardous-smoke, tobacco-smoke and negative event footage for evaluation.

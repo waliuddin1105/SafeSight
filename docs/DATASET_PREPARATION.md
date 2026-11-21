@@ -78,7 +78,7 @@ It preserves original annotations and reports DOWNLOADED_NEEDS_ANNOTATIONS, incl
 - Body: review bending/deep-bend and lying/lying-on-floor semantics.
 - Phone: head boxes cannot replace required person boxes.
 - Smoking: lighter annotations and hidden-cigarette event coverage are missing.
-- Fire/smoke: required person annotations and smoke-source event labels need completion.
+- Fire/smoke: use only smoke=0 and fire=1 object labels; smoke-source event labels still need completion for qualification.
 - All: source-video/scene provenance and genuine held-out behavioral videos need auditing.
 
 Missing classes are not filled using automatic predictions, and frames are not randomly
