@@ -116,14 +116,17 @@ def build(app) -> dict:
                         "multipart/form-data": {
                             "schema": {
                                 "type": "object",
-                                "required": ["file", "source_id"],
+                                "required": ["file"],
                                 "properties": {
                                     "file": {
                                         "type": "string",
                                         "format": "binary",
                                         "description": "MP4/MOV/MKV/AVI recording or JPEG/PNG/WebP still image",
                                     },
-                                    "source_id": {"type": "string"},
+                                    "source_id": {
+                                        "type": "string",
+                                        "description": "Optional configured upload source; omitted for the neutral Testing Lab source",
+                                    },
                                     "models": {"type": "string", "description": "JSON array of model slugs"},
                                     "versions": {
                                         "type": "string",

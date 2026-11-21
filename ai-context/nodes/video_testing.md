@@ -15,8 +15,10 @@ Playback displays sampled boxes/scores, unknown intervals, seekable alerts, prog
 cancellation and measured processing FPS. Reloading the page retains job history.
 
 ## Inputs and outputs
-Inputs: video or image, upload source, selected versions, optional capture time and annotated
-event JSON; or a configured browser source and selected active model slugs. Outputs: protected ranged playback, paginated timestamped predictions,
+Inputs: video or image, selected versions, optional capture time and annotated event JSON;
+or a configured browser source and selected active model slugs. Uploads automatically use a
+neutral backend-managed Testing Lab source/location unless an API client explicitly supplies a
+configured source. Outputs: protected ranged playback, paginated timestamped predictions,
 incident timeline and optional measured event precision/recall. API contract is
 docs/openapi.json; frontend API/types/auth/capture/incidents/setup/testing are separate.
 
@@ -28,3 +30,5 @@ list retains a bounded 5000-row display window; paginated API results remain ava
 Entrance verification is disabled for still images because it requires an ordered sequence.
 Single-image jobs expose detections/classifications but cannot establish persistence-based alerts.
 Webcam model selection applies to that source session and does not select inactive versions.
+The ordinary testing UI intentionally has no location/source selector; location-specific policy
+testing remains available to API clients through the optional source_id field.

@@ -5,7 +5,8 @@
 - Added a separate responsive Testing Lab page with recorded-footage, browser-webcam and
   still-image modes plus compatible model/version selection.
 - Still images execute as one-frame pinned worker jobs; webcam start accepts a validated
-  per-session model selection. No inference was moved into Flask.
+  per-session model selection. Footage/image uploads reuse an automatically created neutral
+  Testing Lab source, so the UI requires no configured upload source. No inference was moved into Flask.
 - Verified 57 unit tests, 17 integration tests with the two documented SQLite-only concurrency
   checks deselected, three targeted image/webcam/pinned-job integration checks, frontend
   production build, six API response tests, OpenAPI generation and context graph integrity.

@@ -12,7 +12,7 @@ from sqlalchemy import select
 
 from tests.integration.test_api import app  # noqa: F401
 from tests.integration.test_supabase_auth import signin
-from safesight.storage.schema import AuthSession, utcnow
+from safesight.storage.schema import AuthSession, Job, Location, Source, utcnow
 from safesight.worker.__main__ import Worker
 from training.common.fixtures import generate
 from tools.build_openapi import build
@@ -113,6 +113,11 @@ def test_concurrent_refresh_rotates_once(app):
 def test_openapi_covers_routes_and_public_job_fields(app):
     specification = build(app)
     assert "/api/v1/jobs/{job_id}/cancel" in specification["paths"]
+    upload = specification["paths"]["/api/v1/uploads"]["post"]["requestBody"]["content"][
+        "multipart/form-data"
+    ]["schema"]
+    assert upload["required"] == ["file"]
+    assert "Optional configured upload source" in upload["properties"]["source_id"]["description"]
     schema = specification["components"]["schemas"]["processing_jobs"]
     assert "snapshot" in schema["properties"] and "path" not in schema["properties"]
     assert "auth_sessions" not in specification["components"]["schemas"]
@@ -154,18 +159,11 @@ def test_still_image_runs_through_pinned_worker_job(app):
     client = app.test_client()
     login = signin(client)
     headers = {"X-CSRF-Token": login.json["csrf_token"]}
-    location = client.post("/api/v1/locations", json={"name": "Image test room"}, headers=headers).json
-    source = client.post(
-        "/api/v1/sources",
-        json={"name": "Still image tests", "kind": "upload", "location_id": location["id"]},
-        headers=headers,
-    ).json
     image = io.BytesIO()
     Image.new("RGB", (128, 96), color=(220, 90, 25)).save(image, "PNG")
     response = client.post(
         "/api/v1/uploads",
         data={
-            "source_id": source["id"],
             "models": '["fire_smoke"]',
             "versions": '{"fire_smoke":"untrained-inference-fixture-v1"}',
             "evaluation": "true",
@@ -178,6 +176,12 @@ def test_still_image_runs_through_pinned_worker_job(app):
     assert job["snapshot"]["media_kind"] == "image"
     assert job["snapshot"]["original_filename"] == "inspection.png"
     assert client.get(f"/api/v1/jobs/{job['id']}/video").mimetype == "video/mp4"
+    with app.extensions["db_sessions"]() as db:
+        stored = db.get(Job, job["id"])
+        source = db.get(Source, stored.source_id)
+        location = db.get(Location, source.location_id)
+        assert source.config == {"testing_lab": True}
+        assert location.name == "SafeSight Testing Lab"
 
     worker = Worker(app.extensions["safesight"])
     try:

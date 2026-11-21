@@ -443,19 +443,6 @@ export function TestingWorkspace({
             </div>
             <div className="form-grid">
               <label>
-                Testing location/source
-                <select name="source_id" required>
-                  <option value="">Select upload source</option>
-                  {sources
-                    .filter((source) => source.kind === "upload")
-                    .map((source) => (
-                      <option key={source.id} value={source.id}>
-                        {source.name}
-                      </option>
-                    ))}
-                </select>
-              </label>
-              <label>
                 {mode === "image" ? "Image" : "Video recording"}
                 <input
                   key={mode}

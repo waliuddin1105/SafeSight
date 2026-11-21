@@ -33,6 +33,8 @@ Jobs history/cancel/video/predictions/incidents/metrics and model-version listin
 Uploads accept MP4/MOV/MKV/AVI and JPEG/PNG/WebP. Images are pixel-bounded, decoded once and
 converted to a one-frame worker job. Live source start optionally accepts unique model slugs,
 allowing the testing page to choose active models without changing inference versions.
+Multipart source_id is optional: omission atomically reuses a neutral internal Testing Lab
+location/source, while explicit upload sources retain location policy testing.
 
 OpenAPI now documents optional event ground truth and public job schemas; private session/credential tables remain excluded.
 

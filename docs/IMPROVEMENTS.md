@@ -40,6 +40,8 @@ one/multiple compatible models. Recording/image jobs pin exact versions and expl
 testing; webcam sessions select from active models. Still images become one-frame worker jobs so
 the API never performs inference. Entrance verification is unavailable for images because it
 requires time. The workspace also supports optional capture time and optional event ground truth.
+Footage/image tests automatically use a neutral internal Testing Lab source, removing workspace
+configuration from the normal flow; API clients can still supply a source for policy-specific tests.
 Each job pins cards, hashes,
 thresholds, preprocessing, sample rate, fusion and source/location rules. Model activation
 is unaffected. Authenticated APIs expose history, cancellation, ranged original video,

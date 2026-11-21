@@ -23,6 +23,7 @@ from flask import abort, jsonify, request
 from safesight.config import within
 from safesight.storage.schema import (
     Job,
+    Location,
     Source,
     identifier,
 )
@@ -38,6 +39,30 @@ from safesight.backend.validation import record
 bp = Blueprint("uploads", __name__)
 
 
+def testing_source(db) -> Source:
+    """Reuse a neutral internal source so ad-hoc tests need no workspace setup."""
+    location = db.scalar(select(Location).where(Location.name == "SafeSight Testing Lab"))
+    if location is None:
+        location = Location(name="SafeSight Testing Lab", timezone=cfg["timezone"], policies={})
+        db.add(location)
+        db.flush()
+    candidates = db.scalars(
+        select(Source).where(Source.kind == "upload", Source.location_id == location.id).order_by(Source.id)
+    )
+    source = next((row for row in candidates if row.config.get("testing_lab") is True), None)
+    if source is None:
+        source = Source(
+            name="Testing Lab uploads",
+            location_id=location.id,
+            kind="upload",
+            config={"testing_lab": True},
+            enabled_models=[],
+        )
+        db.add(source)
+        db.flush()
+    return source
+
+
 @bp.post("/api/v1/uploads")
 @authenticated
 def upload():
@@ -48,8 +73,9 @@ def upload():
     if not file or suffix not in (*video_suffixes, *image_suffixes):
         abort(400, "Upload a supported video recording or still image")
     media_kind = "image" if suffix in image_suffixes else "video"
-    with sessions() as db:
-        source = record(db, Source, request.form.get("source_id"))
+    with sessions.begin() as db:
+        requested_source = request.form.get("source_id")
+        source = record(db, Source, requested_source) if requested_source else testing_source(db)
         if source.kind != "upload":
             abort(400, "Choose an upload source")
         source_id = source.id
@@ -62,8 +88,6 @@ def upload():
         snapshot["source_config"] = {
             k: v for k, v in source.config.items() if k in ("entrance_roi", "guard_region", "crossing_line_y")
         }
-        from safesight.storage.schema import Location
-
         location = db.get(Location, source.location_id)
         snapshot["source_config"]["location_policies"] = dict(location.policies) if location else {}
         snapshot.pop("fingerprint")

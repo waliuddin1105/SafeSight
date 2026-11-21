@@ -1588,6 +1588,7 @@
                     "type": "string"
                   },
                   "source_id": {
+                    "description": "Optional configured upload source; omitted for the neutral Testing Lab source",
                     "type": "string"
                   },
                   "versions": {
@@ -1596,8 +1597,7 @@
                   }
                 },
                 "required": [
-                  "file",
-                  "source_id"
+                  "file"
                 ],
                 "type": "object"
               }
