@@ -102,6 +102,8 @@ export interface Job {
   processing_seconds: number;
   snapshot: {
     evaluation: boolean;
+    media_kind?: "video" | "image";
+    original_filename?: string;
     cards: Partial<Record<Slug, { run_id: string }>>;
   };
 }

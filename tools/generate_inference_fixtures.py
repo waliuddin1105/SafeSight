@@ -35,8 +35,18 @@ class EntranceFixture(torch.nn.Module):
 def generate() -> Path:
     """Build deterministic, synthetic-only fixtures independently of all train.py files."""
     root = ROOT / "tests/fixtures/inference-models"
-    if (root / "fixture.json").exists():
-        return root
+    contract = hashlib.sha256(json.dumps(CLASSES, sort_keys=True).encode()).hexdigest()
+    marker = root / "fixture.json"
+    if marker.exists():
+        try:
+            if json.loads(marker.read_text()).get("contract") == contract:
+                return root
+        except (json.JSONDecodeError, OSError):
+            pass
+        fixture_root = (ROOT / "tests/fixtures").resolve()
+        if not root.resolve().is_relative_to(fixture_root):
+            raise ValueError("Refusing to replace inference fixtures outside tests/fixtures")
+        shutil.rmtree(root)
     torch.manual_seed(42)
     torch.set_num_threads(2)
     from ultralytics import YOLO
@@ -81,7 +91,7 @@ def generate() -> Path:
     target = root / "_pretrained/pose_landmarker_lite.task"
     if pose.resolve() != target.resolve():
         shutil.copyfile(pose, target)
-    (root / "fixture.json").write_text(json.dumps({"synthetic": True, "trained": False, "seed": 42}))
+    marker.write_text(json.dumps({"synthetic": True, "trained": False, "seed": 42, "contract": contract}))
     return root
 
 

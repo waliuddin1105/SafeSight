@@ -121,6 +121,19 @@ def start_source(source_id):
         source = record(db, Source, source_id)
         if source.kind == "upload":
             abort(400, "Upload sources are started by submitting recordings")
+        data = request.get_json(silent=True) or {}
+        if not isinstance(data, dict):
+            abort(400, "Live-session options must be a JSON object")
+        selected_models = data.get("models")
+        if selected_models is not None:
+            if (
+                not isinstance(selected_models, list)
+                or not selected_models
+                or len(set(selected_models)) != len(selected_models)
+                or any(name not in SLUGS for name in selected_models)
+            ):
+                abort(400, "Choose one or more unique supported models")
+            source.enabled_models = selected_models
         active = db.scalar(
             select(func.count()).select_from(Source).where(Source.active.is_(True), Source.id != source.id)
         )

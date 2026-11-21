@@ -1,4 +1,18 @@
 # M0-M7 verification record
+
+## 2026-11-21 multi-input testing lab
+
+- Added a separate responsive Testing Lab page with recorded-footage, browser-webcam and
+  still-image modes plus compatible model/version selection.
+- Still images execute as one-frame pinned worker jobs; webcam start accepts a validated
+  per-session model selection. No inference was moved into Flask.
+- Verified 57 unit tests, 17 integration tests with the two documented SQLite-only concurrency
+  checks deselected, three targeted image/webcam/pinned-job integration checks, frontend
+  production build, six API response tests, OpenAPI generation and context graph integrity.
+- A real local browser/Supabase session reached the Testing Lab and displayed all three modes;
+  the authenticated versions API returned the installed fire/smoke evaluation card. No model
+  training or real-data accuracy evaluation was run.
+
 ## Empty API response recovery
 
 Six frontend response tests pass for empty proxy failures, HTML gateway errors, JSON errors, 401 expiry, 204/empty-200 handling and network/abort errors. TypeScript/Vite build passes. The backend was stopped while Vite was serving; it was restarted. The user confirmed successful sign-in through Vite after its proxy was changed to preserve the browser-facing Host. Login re-fetches CSRF after backend restart; origin and CSRF checks remain enabled.

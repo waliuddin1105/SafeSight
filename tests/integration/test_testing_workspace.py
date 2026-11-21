@@ -1,15 +1,18 @@
 """Pinned video jobs, cancellation and authenticated result/contract boundaries."""
 
+# ruff: noqa: F811 -- imported pytest fixture intentionally shares the argument name.
+
 import io
 import json
 from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
 
+from PIL import Image
 from sqlalchemy import select
 
 from tests.integration.test_api import app  # noqa: F401
 from tests.integration.test_supabase_auth import signin
-from safesight.storage.schema import AuthSession, Job, utcnow
+from safesight.storage.schema import AuthSession, utcnow
 from safesight.worker.__main__ import Worker
 from training.common.fixtures import generate
 from tools.build_openapi import build
@@ -145,6 +148,76 @@ def test_storage_shortfall_is_507_without_a_job(app, monkeypatch):
     )
     assert response.status_code == 507
     assert client.get("/api/v1/jobs").json["total"] == 0
+
+
+def test_still_image_runs_through_pinned_worker_job(app):
+    client = app.test_client()
+    login = signin(client)
+    headers = {"X-CSRF-Token": login.json["csrf_token"]}
+    location = client.post("/api/v1/locations", json={"name": "Image test room"}, headers=headers).json
+    source = client.post(
+        "/api/v1/sources",
+        json={"name": "Still image tests", "kind": "upload", "location_id": location["id"]},
+        headers=headers,
+    ).json
+    image = io.BytesIO()
+    Image.new("RGB", (128, 96), color=(220, 90, 25)).save(image, "PNG")
+    response = client.post(
+        "/api/v1/uploads",
+        data={
+            "source_id": source["id"],
+            "models": '["fire_smoke"]',
+            "versions": '{"fire_smoke":"untrained-inference-fixture-v1"}',
+            "evaluation": "true",
+            "file": (io.BytesIO(image.getvalue()), "inspection.png"),
+        },
+        headers=headers,
+    )
+    assert response.status_code == 202, response.json
+    job = response.json
+    assert job["snapshot"]["media_kind"] == "image"
+    assert job["snapshot"]["original_filename"] == "inspection.png"
+    assert client.get(f"/api/v1/jobs/{job['id']}/video").mimetype == "video/mp4"
+
+    worker = Worker(app.extensions["safesight"])
+    try:
+        for _ in range(5):
+            worker.tick_job()
+            if client.get(f"/api/v1/jobs/{job['id']}").json["state"] == "completed":
+                break
+    finally:
+        worker.close()
+    completed = client.get(f"/api/v1/jobs/{job['id']}").json
+    predictions = client.get(f"/api/v1/jobs/{job['id']}/predictions").json["items"]
+    assert completed["state"] == "completed"
+    assert completed["processed_frames"] == 1
+    assert len(predictions) == 1
+
+
+def test_webcam_start_can_select_models_for_that_session(app):
+    client = app.test_client()
+    login = signin(client)
+    headers = {"X-CSRF-Token": login.json["csrf_token"]}
+    location = client.post("/api/v1/locations", json={"name": "Webcam test room"}, headers=headers).json
+    source = client.post(
+        "/api/v1/sources",
+        json={"name": "Browser test", "kind": "browser", "location_id": location["id"]},
+        headers=headers,
+    ).json
+    started = client.post(
+        f"/api/v1/sources/{source['id']}/start",
+        json={"models": ["fire_smoke"]},
+        headers=headers,
+    )
+    assert started.status_code == 200
+    assert started.json["enabled_models"] == ["fire_smoke"]
+    client.post(f"/api/v1/sources/{source['id']}/stop", headers=headers)
+    invalid = client.post(
+        f"/api/v1/sources/{source['id']}/start",
+        json={"models": ["fire_smoke", "fire_smoke"]},
+        headers=headers,
+    )
+    assert invalid.status_code == 400
 
 
 def test_lost_worker_owner_connection_stops_processing(app):

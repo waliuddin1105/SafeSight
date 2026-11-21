@@ -3,16 +3,20 @@
 from __future__ import annotations
 
 from datetime import datetime
+import errno
 from pathlib import Path
 
 import av
 import json
 import hashlib
+import numpy as np
 import shutil
+from PIL import Image, UnidentifiedImageError
 from sqlalchemy import select, func
 from flask import send_file
 from safesight.backend.context import cfg
 from safesight.inference.snapshots import snapshot_models
+from safesight.ingestion.video import write_video
 from safesight.storage.schema import JobFrame
 from flask import abort, jsonify, request
 
@@ -38,8 +42,12 @@ bp = Blueprint("uploads", __name__)
 @authenticated
 def upload():
     file = request.files.get("file")
-    if not file or Path(file.filename or "").suffix.lower() not in (".mp4", ".mov", ".mkv", ".avi"):
-        abort(400, "Upload a supported video recording")
+    suffix = Path(file.filename or "").suffix.lower() if file else ""
+    video_suffixes = (".mp4", ".mov", ".mkv", ".avi")
+    image_suffixes = (".jpg", ".jpeg", ".png", ".webp")
+    if not file or suffix not in (*video_suffixes, *image_suffixes):
+        abort(400, "Upload a supported video recording or still image")
+    media_kind = "image" if suffix in image_suffixes else "video"
     with sessions() as db:
         source = record(db, Source, request.form.get("source_id"))
         if source.kind != "upload":
@@ -64,19 +72,33 @@ def upload():
         request.content_length or cfg["max_upload_bytes"]
     ):
         abort(507, "Insufficient media storage")
-    relative = f"uploads/{identifier()}{Path(file.filename).suffix.lower()}"
+    upload_id = identifier()
+    relative = f"uploads/{upload_id}{'.mp4' if media_kind == 'image' else suffix}"
     path = within(media, relative)
+    staged_image = within(media, f"uploads/{upload_id}.source{suffix}") if media_kind == "image" else None
     path.parent.mkdir(parents=True, exist_ok=True)
     try:
-        file.save(path)
-        with av.open(str(path), timeout=cfg["decode_timeout_seconds"]) as container:
-            stream = container.streams.video[0]
-            next(container.decode(stream))
-            duration = (
-                float(stream.duration * stream.time_base)
-                if stream.duration
-                else float(container.duration or 0) / av.time_base
-            )
+        if media_kind == "image":
+            file.save(staged_image)
+            with Image.open(staged_image) as image:
+                if image.width * image.height > cfg["max_frame_pixels"]:
+                    raise ValueError("Image exceeds the configured pixel limit")
+                rgb = np.asarray(image.convert("RGB"))
+            write_video(path, [rgb], fps=1, timestamps=[0.0])
+            staged_image.unlink(missing_ok=True)
+            duration = 1.0
+        else:
+            file.save(path)
+            with av.open(str(path), timeout=cfg["decode_timeout_seconds"]) as container:
+                stream = container.streams.video[0]
+                next(container.decode(stream))
+                duration = (
+                    float(stream.duration * stream.time_base)
+                    if stream.duration
+                    else float(container.duration or 0) / av.time_base
+                )
+        snapshot["media_kind"] = media_kind
+        snapshot["original_filename"] = Path(file.filename or "upload").name
         captured = request.form.get("captured_at")
         captured_at = datetime.fromisoformat(captured.replace("Z", "+00:00")) if captured else None
         if captured_at and captured_at.tzinfo is None:
@@ -111,10 +133,21 @@ def upload():
             db.flush()
             result = serialize(job)
         return jsonify(result), 202
-    except (av.error.FFmpegError, IndexError, StopIteration, ValueError):
+    except (av.error.FFmpegError, IndexError, StopIteration, UnidentifiedImageError, ValueError):
+        if staged_image:
+            staged_image.unlink(missing_ok=True)
         path.unlink(missing_ok=True)
-        abort(400, "Invalid recording or capture time")
+        abort(400, "Invalid recording, image, or capture time")
+    except OSError as error:
+        if staged_image:
+            staged_image.unlink(missing_ok=True)
+        path.unlink(missing_ok=True)
+        if error.errno == errno.ENOSPC:
+            abort(507, "Insufficient media storage")
+        abort(400, "Image or recording could not be decoded")
     except Exception:
+        if staged_image:
+            staged_image.unlink(missing_ok=True)
         path.unlink(missing_ok=True)
         raise
 

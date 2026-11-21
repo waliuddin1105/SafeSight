@@ -1,6 +1,16 @@
-import { useEffect, useRef, useState, type FormEvent } from "react";
-import { Activity, Upload } from "lucide-react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import {
+  Activity,
+  Camera,
+  CheckCircle2,
+  Clock3,
+  Image as ImageIcon,
+  ShieldAlert,
+  Upload,
+  Video,
+} from "lucide-react";
 import { api } from "./api";
+import type { CaptureController } from "./capture";
 import { date, localTimeToIso } from "./time";
 import {
   labels,
@@ -10,20 +20,63 @@ import {
   type Job,
   type JobFrame,
   type ModelVersion,
+  type ModelStatus,
   type ListResponse,
   type Incident,
 } from "./types";
+
+type TestMode = "video" | "webcam" | "image";
+
+const modes: Array<{
+  id: TestMode;
+  title: string;
+  detail: string;
+  icon: typeof Video;
+  index: string;
+}> = [
+  {
+    id: "video",
+    title: "Recorded footage",
+    detail:
+      "Replay a complete shift clip with a pinned model version and alert timeline.",
+    icon: Video,
+    index: "01",
+  },
+  {
+    id: "webcam",
+    title: "Live webcam",
+    detail:
+      "Evaluate the active models against a browser camera with visible capture health.",
+    icon: Camera,
+    index: "02",
+  },
+  {
+    id: "image",
+    title: "Still image",
+    detail:
+      "Inspect object and posture predictions on one image without claiming temporal alerts.",
+    icon: ImageIcon,
+    index: "03",
+  },
+];
+
 export function TestingWorkspace({
   sources,
   zone,
+  models,
+  capture,
 }: {
   sources: Source[];
   zone: string;
+  models: Record<string, ModelStatus>;
+  capture: CaptureController;
 }) {
-  const [jobs, setJobs] = useState<Job[]>([]),
+  const [mode, setMode] = useState<TestMode>("video"),
+    [jobs, setJobs] = useState<Job[]>([]),
     [job, setJob] = useState<Job | null>(null),
     [versions, setVersions] = useState<ModelVersion[]>([]),
     [selected, setSelected] = useState<Slug[]>([]),
+    [webcamModels, setWebcamModels] = useState<Slug[]>([]),
     [chosen, setChosen] = useState<Partial<Record<Slug, string>>>({}),
     [evaluation, setEvaluation] = useState(false),
     [busy, setBusy] = useState(false),
@@ -37,18 +90,46 @@ export function TestingWorkspace({
       recall?: number | null;
       reason?: string;
     } | null>(null);
-  const video = useRef<HTMLVideoElement>(null),
+  const player = useRef<HTMLVideoElement>(null),
     [ratio, setRatio] = useState(16 / 9),
     epoch = useRef(0),
     cursor = useRef(-1);
+
+  const availableWebcamModels = slugs.filter((slug) => models[slug]?.ready);
+  const chosenVersions = selected
+    .map((slug) =>
+      versions.find(
+        (version) => version.slug === slug && version.run_id === chosen[slug],
+      ),
+    )
+    .filter((version): version is ModelVersion => Boolean(version));
+  const requiresEvaluation = chosenVersions.some(
+    (version) => version.synthetic || version.quality.status !== "PASS",
+  );
+
+  useEffect(() => {
+    if (requiresEvaluation) setEvaluation(true);
+  }, [requiresEvaluation]);
+  useEffect(() => {
+    if (mode === "image" && selected.includes("entrance_guard")) {
+      setSelected((current) =>
+        current.filter((slug) => slug !== "entrance_guard"),
+      );
+    }
+  }, [mode, selected]);
+  useEffect(() => {
+    if (!webcamModels.length && availableWebcamModels.length) {
+      setWebcamModels(availableWebcamModels);
+    }
+  }, [availableWebcamModels.join("|")]);
   useEffect(() => {
     const controller = new AbortController();
     api<{ items: ModelVersion[] }>("/models/versions", {
       signal: controller.signal,
     })
-      .then((d) => setVersions(d.items))
-      .catch((e) => {
-        if (e.name !== "AbortError") setError(e.message);
+      .then((response) => setVersions(response.items))
+      .catch((reason) => {
+        if (reason.name !== "AbortError") setError(reason.message);
       });
     return () => controller.abort();
   }, []);
@@ -59,12 +140,13 @@ export function TestingWorkspace({
       if (pending) return;
       pending = true;
       try {
-        const d = await api<ListResponse<Job>>("/jobs", {
-          signal: controller.signal,
-        });
-        setJobs(d.items);
-      } catch (e) {
-        if ((e as Error).name !== "AbortError") setError((e as Error).message);
+        setJobs(
+          (await api<ListResponse<Job>>("/jobs", { signal: controller.signal }))
+            .items,
+        );
+      } catch (reason) {
+        if ((reason as Error).name !== "AbortError")
+          setError((reason as Error).message);
       } finally {
         pending = false;
       }
@@ -89,7 +171,7 @@ export function TestingWorkspace({
       if (pending) return;
       pending = true;
       try {
-        const [j, p, a, m] = await Promise.all([
+        const [detail, predictions, incidents, measured] = await Promise.all([
           api<Job>("/jobs/" + id, { signal: controller.signal }),
           api<{ items: JobFrame[]; next_after: number | null }>(
             "/jobs/" + id + "/predictions?after=" + cursor.current,
@@ -106,15 +188,16 @@ export function TestingWorkspace({
           }>("/jobs/" + id + "/metrics", { signal: controller.signal }),
         ]);
         if (current !== epoch.current) return;
-        setJob(j);
-        setAlerts(a.items);
-        setMetrics(m);
-        if (p.items.length) {
-          setFrames((old) => [...old, ...p.items].slice(-5000));
-          cursor.current = p.next_after ?? cursor.current;
+        setJob(detail);
+        setAlerts(incidents.items);
+        setMetrics(measured);
+        if (predictions.items.length) {
+          setFrames((old) => [...old, ...predictions.items].slice(-5000));
+          cursor.current = predictions.next_after ?? cursor.current;
         }
-      } catch (e) {
-        if ((e as Error).name !== "AbortError") setError((e as Error).message);
+      } catch (reason) {
+        if ((reason as Error).name !== "AbortError")
+          setError((reason as Error).message);
       } finally {
         pending = false;
       }
@@ -127,15 +210,28 @@ export function TestingWorkspace({
       clearInterval(timer);
     };
   }, [job?.id]);
+
+  function toggleModel(slug: Slug, enabled: boolean) {
+    if (!enabled) {
+      setSelected((current) => current.filter((item) => item !== slug));
+      return;
+    }
+    const first = versions.find((version) => version.slug === slug);
+    if (!first) return;
+    setSelected((current) => [...current, slug]);
+    setChosen((current) => ({ ...current, [slug]: first.run_id }));
+  }
+
   async function upload(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
     form.set("models", JSON.stringify(selected));
     form.set("versions", JSON.stringify(chosen));
     form.set("evaluation", String(evaluation));
-    const capture = String(form.get("captured_at") || "");
+    const captureTime = String(form.get("captured_at") || "");
     try {
-      if (capture) form.set("captured_at", localTimeToIso(capture, zone));
+      if (captureTime)
+        form.set("captured_at", localTimeToIso(captureTime, zone));
       else form.delete("captured_at");
       setBusy(true);
       setError("");
@@ -144,287 +240,551 @@ export function TestingWorkspace({
         body: form,
       });
       setJob(uploaded);
-    } catch (e) {
-      setError((e as Error).message);
+    } catch (reason) {
+      setError((reason as Error).message);
     } finally {
       setBusy(false);
     }
   }
+
   function seek(timestamp: number) {
-    if (video.current) {
-      video.current.currentTime = timestamp;
+    if (player.current) {
+      player.current.currentTime = timestamp;
       setPosition(timestamp);
     }
   }
-  const visible = [...frames]
-    .reverse()
-    .find(
-      (frame) => frame.timestamp <= position && position - frame.timestamp < 1,
-    );
+  const visible = useMemo(
+    () =>
+      [...frames]
+        .reverse()
+        .find(
+          (frame) =>
+            frame.timestamp <= position && position - frame.timestamp < 1,
+        ),
+    [frames, position],
+  );
+
   return (
-    <section id="testing" className="testing">
-      <div className="section-head">
+    <section className="testing-page" aria-labelledby="testing-title">
+      <div className="testing-hero">
         <div>
-          <p className="eyebrow">CONTROLLED OBSERVATION</p>
-          <h2>
-            <Upload size={20} /> Video testing workspace
-          </h2>
+          <p className="eyebrow">MODEL TESTING LAB / CONTROLLED INPUT</p>
+          <h1 id="testing-title">
+            Choose the evidence.
+            <br />
+            <em>See what the model sees.</em>
+          </h1>
+          <p className="testing-lead">
+            Run isolated evaluations without changing globally active models.
+            Scores are model confidence, not measured accuracy.
+          </p>
         </div>
-        <span>PINNED MODEL VERSIONS</span>
+        <div className="lab-status" aria-label="Testing system status">
+          <span>{versions.length}</span>
+          <small>installed model versions</small>
+          <span>{availableWebcamModels.length}</span>
+          <small>active for live testing</small>
+        </div>
       </div>
-      <p>
-        Replay recorded footage against one or several models. Detection scores
-        do not measure accuracy.
-      </p>
+
+      <div className="mode-grid" aria-label="Choose testing input">
+        {modes.map((item) => {
+          const Icon = item.icon;
+          return (
+            <button
+              type="button"
+              key={item.id}
+              className={"mode-card" + (mode === item.id ? " selected" : "")}
+              aria-pressed={mode === item.id}
+              onClick={() => {
+                setMode(item.id);
+                setError("");
+              }}
+            >
+              <span className="mode-index">{item.index}</span>
+              <Icon size={26} />
+              <strong>{item.title}</strong>
+              <small>{item.detail}</small>
+              {mode === item.id && (
+                <CheckCircle2 className="mode-check" size={18} />
+              )}
+            </button>
+          );
+        })}
+      </div>
+
       {error && (
         <p className="error" role="alert">
           {error}
         </p>
       )}
-      <div className="testing-grid">
-        <form onSubmit={upload}>
-          <label>
-            Upload source
-            <select name="source_id" required>
-              <option value="">Select source</option>
-              {sources
-                .filter((s) => s.kind === "upload")
-                .map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name}
-                  </option>
-                ))}
-            </select>
-          </label>
-          <label>
-            Video recording
-            <input name="file" type="file" accept="video/*,.mkv" required />
-          </label>
-          <label>
-            Recorded at ({zone}, optional)
-            <input type="datetime-local" name="captured_at" />
-          </label>
-          <label>
-            Optional event ground truth (JSON)
-            <textarea name="ground_truth" placeholder='{"events":[]}' />
-          </label>
-          <fieldset>
-            <legend>Models to test</legend>
-            {slugs.map((slug) => {
-              const available = versions.filter((v) => v.slug === slug);
-              return (
-                <div key={slug}>
-                  <label>
+
+      {mode === "webcam" ? (
+        <section
+          className="lab-panel webcam-panel"
+          aria-label="Webcam evaluation"
+        >
+          <div className="lab-panel-copy">
+            <p className="eyebrow">LIVE / ACTIVE VERSIONS</p>
+            <h2>Configure the live observation</h2>
+            <p>
+              Browser frames are sampled at 5 FPS and processed by the worker.
+              Stop capture before leaving this page.
+            </p>
+            <label>
+              Browser camera source
+              <select
+                value={capture.sourceId}
+                disabled={capture.live}
+                onChange={(event) => capture.setSourceId(event.target.value)}
+              >
+                <option value="">Select a configured browser source</option>
+                {sources
+                  .filter((source) => source.kind === "browser")
+                  .map((source) => (
+                    <option key={source.id} value={source.id}>
+                      {source.name}
+                    </option>
+                  ))}
+              </select>
+            </label>
+            <fieldset className="model-picker compact">
+              <legend>Models to evaluate</legend>
+              {slugs.map((slug) => {
+                const ready = models[slug]?.ready;
+                return (
+                  <label
+                    className={"model-option" + (!ready ? " unavailable" : "")}
+                    key={slug}
+                  >
                     <input
                       type="checkbox"
-                      checked={selected.includes(slug)}
-                      disabled={!available.length}
-                      onChange={(e) =>
-                        setSelected(
-                          e.target.checked
-                            ? [...selected, slug]
-                            : selected.filter((s) => s !== slug),
+                      disabled={!ready || capture.live}
+                      checked={webcamModels.includes(slug)}
+                      onChange={(event) =>
+                        setWebcamModels((current) =>
+                          event.target.checked
+                            ? [...current, slug]
+                            : current.filter((item) => item !== slug),
                         )
                       }
                     />
-                    {labels[slug]}
-                    {!available.length && " ? no artifacts"}
+                    <span>
+                      <strong>{labels[slug]}</strong>
+                      <small>
+                        {ready
+                          ? models[slug]?.evaluation_only
+                            ? "Evaluation only"
+                            : "Ready"
+                          : "No active model"}
+                      </small>
+                    </span>
                   </label>
-                  {selected.includes(slug) && (
-                    <select
-                      aria-label={labels[slug] + " version"}
-                      value={chosen[slug] || ""}
-                      onChange={(e) =>
-                        setChosen({ ...chosen, [slug]: e.target.value })
-                      }
-                    >
-                      <option value="">Current active version</option>
-                      {available.map((v) => (
-                        <option key={v.run_id} value={v.run_id}>
-                          {v.run_id} ?{" "}
-                          {v.synthetic ? "synthetic" : v.quality.status}
-                        </option>
-                      ))}
-                    </select>
-                  )}
-                </div>
-              );
-            })}
-          </fieldset>
-          <label>
-            <input
-              type="checkbox"
-              checked={evaluation}
-              onChange={(e) => setEvaluation(e.target.checked)}
+                );
+              })}
+            </fieldset>
+            <button
+              disabled={
+                !capture.live && (!capture.sourceId || !webcamModels.length)
+              }
+              onClick={async () => {
+                try {
+                  setError("");
+                  if (capture.live) await capture.stop();
+                  else await capture.start(webcamModels);
+                } catch (reason) {
+                  setError((reason as Error).message);
+                }
+              }}
+            >
+              {capture.live ? "Stop webcam test" : "Start webcam test"}
+              <Camera size={17} />
+            </button>
+          </div>
+          <div className="camera-stage">
+            <video
+              ref={capture.video}
+              muted
+              playsInline
+              aria-label="Live testing camera preview"
             />
-            Allow evaluation-only models
-          </label>
-          <button disabled={busy || !selected.length}>
-            {busy ? "Uploading?" : "Queue recording"}
-          </button>
-        </form>
-        <div>
-          <h3>Recording history</h3>
-          {!jobs.length && <p>No recordings queued yet.</p>}
-          <ul className="job-history">
-            {jobs.map((item) => (
-              <li key={item.id}>
-                <button
-                  className={"ghost " + (job?.id === item.id ? "selected" : "")}
-                  onClick={() => setJob(item)}
-                >
-                  <span>{date(item.created_at, zone)}</span>
-                  <small>
-                    {item.state} ? {Math.max(0, item.cursor).toFixed(1)} /{" "}
-                    {item.duration.toFixed(1)}s
-                  </small>
-                </button>
-              </li>
-            ))}
-          </ul>
-        </div>
-      </div>
-      {job && (
-        <article className="test-result">
-          <div className="section-head">
-            <h3>
-              <Activity size={18} />
-              {job.state}
-            </h3>
-            {!["completed", "failed", "cancelled"].includes(job.state) && (
-              <button
-                className="ghost"
-                disabled={job.cancel_requested}
-                onClick={async () => {
-                  try {
-                    setJob(
-                      await api<Job>("/jobs/" + job.id + "/cancel", {
-                        method: "POST",
-                      }),
-                    );
-                  } catch (e) {
-                    setError((e as Error).message);
-                  }
-                }}
-              >
-                {job.cancel_requested ? "Cancelling?" : "Cancel job"}
-              </button>
+            <div className="camera-hud">
+              <span className={capture.live ? "live" : ""}>
+                {capture.live ? "LIVE" : "STANDBY"}
+              </span>
+              <span>
+                {webcamModels.length} model
+                {webcamModels.length === 1 ? "" : "s"}
+              </span>
+            </div>
+            {!capture.live && (
+              <p>Camera preview appears here after permission is granted.</p>
             )}
           </div>
-          <progress
-            aria-label="Processing progress"
-            value={Math.max(0, job.cursor)}
-            max={job.duration || 1}
-          />
-          <p>
-            {job.processed_frames} sampled frames ?{" "}
-            {job.processing_seconds
-              ? (job.processed_frames / job.processing_seconds).toFixed(1)
-              : "?"}{" "}
-            processing FPS
-          </p>
-          {job.error && <p className="error">{job.error}</p>}
-          {job.snapshot.evaluation && (
-            <p className="error">
-              Evaluation testing: these results are not qualified for
-              production.
-            </p>
-          )}
-          <div className="video-stage" style={{ aspectRatio: ratio }}>
-            <video
-              key={job.id}
-              ref={video}
-              src={"/api/v1/jobs/" + job.id + "/video"}
-              controls
-              onTimeUpdate={(e) => setPosition(e.currentTarget.currentTime)}
-              onLoadedMetadata={(e) =>
-                setRatio(
-                  e.currentTarget.videoWidth / e.currentTarget.videoHeight ||
-                    16 / 9,
-                )
-              }
-            />
-            <svg
-              viewBox="0 0 1000 1000"
-              preserveAspectRatio="none"
-              aria-hidden="true"
-            >
-              {visible?.predictions.flatMap((p) =>
-                p.detections.map((d, i) => (
-                  <rect
-                    key={p.slug + i}
-                    x={d.box[0] * 1000}
-                    y={d.box[1] * 1000}
-                    width={(d.box[2] - d.box[0]) * 1000}
-                    height={(d.box[3] - d.box[1]) * 1000}
-                  />
-                )),
-              )}
-            </svg>
-          </div>
-          <p>
-            {position.toFixed(1)}s ?{" "}
-            {visible
-              ? "Recorded predictions"
-              : "No sampled result at this timestamp"}
-          </p>
-          {visible?.predictions.map((p) => (
-            <p key={p.slug}>
-              <b>{labels[p.slug]}</b>:{" "}
-              {p.unknown_reason ||
-                p.detections
-                  .map((d) => `${d.label} ${(d.score * 100).toFixed(0)}%`)
-                  .join(", ") ||
-                "No detections"}
-            </p>
-          ))}
-          <p>
-            {metrics?.available
-              ? `Event precision: ${metrics.precision == null ? "undefined" : (metrics.precision * 100).toFixed(1) + "%"} ? recall: ${metrics.recall == null ? "undefined" : (metrics.recall * 100).toFixed(1) + "%"} (supplied ground truth)`
-              : metrics?.reason || "No ground truth metrics available"}
-          </p>
-          <h3>Alert timeline</h3>
-          {!alerts.length && (
-            <p>
-              No emitted alerts. This does not establish that the footage is
-              safe.
-            </p>
-          )}
-          <div className="timeline">
-            {alerts.map((a) => (
-              <button
-                className="ghost"
-                key={a.id}
-                onClick={() => seek(a.start_offset)}
-              >
-                {labels[a.slug]} ? {a.start_offset.toFixed(1)}?
-                {a.end_offset.toFixed(1)}s
-              </button>
-            ))}
-          </div>
-          <details>
-            <summary>Sampled observations and unknown periods</summary>
-            <div className="observations">
-              {frames.map((frame) => (
-                <button
-                  className="ghost"
-                  key={frame.timestamp}
-                  onClick={() => seek(frame.timestamp)}
-                >
-                  {frame.timestamp.toFixed(1)}s ?{" "}
-                  {Object.values(frame.unknown).join("; ") ||
-                    frame.predictions
-                      .map(
-                        (p) =>
-                          p.unknown_reason ||
-                          `${labels[p.slug]}: ${p.detections.length} detections`,
-                      )
-                      .join("; ")}
-                </button>
-              ))}
+        </section>
+      ) : (
+        <section
+          className="lab-panel upload-panel"
+          aria-label={`${mode} evaluation`}
+        >
+          <form onSubmit={upload}>
+            <div className="lab-panel-heading">
+              <div>
+                <p className="eyebrow">
+                  {mode === "image" ? "SINGLE FRAME" : "RECORDED SEQUENCE"}
+                </p>
+                <h2>
+                  {mode === "image"
+                    ? "Inspect an image"
+                    : "Replay recorded footage"}
+                </h2>
+              </div>
+              {mode === "image" ? <ImageIcon /> : <Upload />}
             </div>
-          </details>
-        </article>
+            <div className="form-grid">
+              <label>
+                Testing location/source
+                <select name="source_id" required>
+                  <option value="">Select upload source</option>
+                  {sources
+                    .filter((source) => source.kind === "upload")
+                    .map((source) => (
+                      <option key={source.id} value={source.id}>
+                        {source.name}
+                      </option>
+                    ))}
+                </select>
+              </label>
+              <label>
+                {mode === "image" ? "Image" : "Video recording"}
+                <input
+                  key={mode}
+                  name="file"
+                  type="file"
+                  accept={
+                    mode === "image"
+                      ? "image/jpeg,image/png,image/webp"
+                      : "video/*,.mkv"
+                  }
+                  required
+                />
+              </label>
+              <label>
+                Captured at ({zone}, optional)
+                <input type="datetime-local" name="captured_at" />
+              </label>
+              {mode === "video" && (
+                <label>
+                  Optional event ground truth (JSON)
+                  <textarea name="ground_truth" placeholder='{"events":[]}' />
+                </label>
+              )}
+            </div>
+
+            <fieldset className="model-picker">
+              <legend>Choose models and exact versions</legend>
+              <div className="model-picker-grid">
+                {slugs.map((slug) => {
+                  const available = versions.filter(
+                    (version) => version.slug === slug,
+                  );
+                  const unsupported =
+                    mode === "image" && slug === "entrance_guard";
+                  return (
+                    <div
+                      className={
+                        "model-option" +
+                        (!available.length || unsupported ? " unavailable" : "")
+                      }
+                      key={slug}
+                    >
+                      <label>
+                        <input
+                          type="checkbox"
+                          checked={selected.includes(slug)}
+                          disabled={!available.length || unsupported}
+                          onChange={(event) =>
+                            toggleModel(slug, event.target.checked)
+                          }
+                        />
+                        <span>
+                          <strong>{labels[slug]}</strong>
+                          <small>
+                            {unsupported
+                              ? "Requires an ordered sequence"
+                              : available.length
+                                ? `${available.length} version${available.length === 1 ? "" : "s"}`
+                                : "No installed version"}
+                          </small>
+                        </span>
+                      </label>
+                      {selected.includes(slug) && (
+                        <select
+                          aria-label={labels[slug] + " version"}
+                          value={chosen[slug] || ""}
+                          onChange={(event) =>
+                            setChosen({ ...chosen, [slug]: event.target.value })
+                          }
+                        >
+                          {available.map((version) => (
+                            <option key={version.run_id} value={version.run_id}>
+                              {version.run_id} ·{" "}
+                              {version.synthetic
+                                ? "synthetic"
+                                : version.quality.status}
+                            </option>
+                          ))}
+                        </select>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </fieldset>
+
+            <div className="submission-bar">
+              <label className="evaluation-consent">
+                <input
+                  type="checkbox"
+                  checked={evaluation}
+                  disabled={requiresEvaluation}
+                  onChange={(event) => setEvaluation(event.target.checked)}
+                />
+                <span>
+                  <strong>Evaluation mode</strong>
+                  <small>
+                    {requiresEvaluation
+                      ? "Required by the selected unqualified version"
+                      : "Allow evaluation-only artifacts"}
+                  </small>
+                </span>
+              </label>
+              <button
+                disabled={
+                  busy ||
+                  !selected.length ||
+                  selected.some((slug) => !chosen[slug])
+                }
+              >
+                {busy
+                  ? "Preparing test…"
+                  : mode === "image"
+                    ? "Evaluate image"
+                    : "Queue footage"}
+                {mode === "image" ? (
+                  <ImageIcon size={17} />
+                ) : (
+                  <Upload size={17} />
+                )}
+              </button>
+            </div>
+          </form>
+        </section>
+      )}
+
+      {mode !== "webcam" && (
+        <section className="job-console">
+          <div className="job-rail">
+            <div className="section-head">
+              <h2>
+                <Clock3 size={18} /> Test history
+              </h2>
+              <span>{jobs.length} RECENT</span>
+            </div>
+            {!jobs.length && (
+              <p className="muted">No tests have been queued yet.</p>
+            )}
+            <ul className="job-history">
+              {jobs.map((item) => (
+                <li key={item.id}>
+                  <button
+                    className={
+                      "ghost " + (job?.id === item.id ? "selected" : "")
+                    }
+                    onClick={() => setJob(item)}
+                  >
+                    <span>
+                      {item.snapshot.media_kind === "image" ? (
+                        <ImageIcon size={15} />
+                      ) : (
+                        <Video size={15} />
+                      )}{" "}
+                      {item.snapshot.original_filename ||
+                        date(item.created_at, zone)}
+                    </span>
+                    <small>
+                      {item.state} · {item.processed_frames} observations
+                    </small>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          {job ? (
+            <article className="test-result">
+              <div className="section-head">
+                <div>
+                  <p className="eyebrow">
+                    PINNED TEST / {job.snapshot.media_kind || "VIDEO"}
+                  </p>
+                  <h2>
+                    <Activity size={18} /> {job.state}
+                  </h2>
+                </div>
+                {!["completed", "failed", "cancelled"].includes(job.state) && (
+                  <button
+                    className="ghost"
+                    disabled={job.cancel_requested}
+                    onClick={async () => {
+                      try {
+                        setJob(
+                          await api<Job>("/jobs/" + job.id + "/cancel", {
+                            method: "POST",
+                          }),
+                        );
+                      } catch (reason) {
+                        setError((reason as Error).message);
+                      }
+                    }}
+                  >
+                    {job.cancel_requested ? "Cancelling…" : "Cancel test"}
+                  </button>
+                )}
+              </div>
+              <progress
+                aria-label="Processing progress"
+                value={Math.max(0, job.cursor)}
+                max={job.duration || 1}
+              />
+              <div className="result-meta">
+                <span>
+                  {job.processed_frames} sampled frame
+                  {job.processed_frames === 1 ? "" : "s"}
+                </span>
+                <span>
+                  {job.processing_seconds
+                    ? (job.processed_frames / job.processing_seconds).toFixed(1)
+                    : "—"}{" "}
+                  processing FPS
+                </span>
+              </div>
+              {job.error && <p className="error">{job.error}</p>}
+              {job.snapshot.evaluation && (
+                <p className="evaluation-banner">
+                  <ShieldAlert size={18} /> Evaluation-only results are not
+                  production-qualified.
+                </p>
+              )}
+              <div className="video-stage" style={{ aspectRatio: ratio }}>
+                <video
+                  key={job.id}
+                  ref={player}
+                  src={"/api/v1/jobs/" + job.id + "/video"}
+                  controls
+                  onTimeUpdate={(event) =>
+                    setPosition(event.currentTarget.currentTime)
+                  }
+                  onLoadedMetadata={(event) =>
+                    setRatio(
+                      event.currentTarget.videoWidth /
+                        event.currentTarget.videoHeight || 16 / 9,
+                    )
+                  }
+                />
+                <svg
+                  viewBox="0 0 1000 1000"
+                  preserveAspectRatio="none"
+                  aria-hidden="true"
+                >
+                  {visible?.predictions.flatMap((prediction) =>
+                    prediction.detections.map((detection, index) => (
+                      <rect
+                        key={prediction.slug + index}
+                        x={detection.box[0] * 1000}
+                        y={detection.box[1] * 1000}
+                        width={(detection.box[2] - detection.box[0]) * 1000}
+                        height={(detection.box[3] - detection.box[1]) * 1000}
+                      />
+                    )),
+                  )}
+                </svg>
+              </div>
+              <div className="prediction-readout">
+                <small>{position.toFixed(1)} SECONDS</small>
+                {visible?.predictions.length ? (
+                  visible.predictions.map((prediction) => (
+                    <p key={prediction.slug}>
+                      <b>{labels[prediction.slug]}</b>
+                      {prediction.unknown_reason ||
+                        prediction.detections
+                          .map(
+                            (detection) =>
+                              `${detection.label} ${(detection.score * 100).toFixed(0)}%`,
+                          )
+                          .join(", ") ||
+                        "No detections"}
+                    </p>
+                  ))
+                ) : (
+                  <p>No sampled result at this position yet.</p>
+                )}
+              </div>
+              <p className="muted">
+                {metrics?.available
+                  ? `Ground-truth event precision: ${metrics.precision == null ? "undefined" : (metrics.precision * 100).toFixed(1) + "%"}; recall: ${metrics.recall == null ? "undefined" : (metrics.recall * 100).toFixed(1) + "%"}.`
+                  : metrics?.reason || "No ground-truth metrics available."}
+              </p>
+              <h3>Alert timeline</h3>
+              {!alerts.length && (
+                <p className="muted">
+                  No alerts emitted. This does not establish that the input is
+                  safe.
+                </p>
+              )}
+              <div className="timeline">
+                {alerts.map((alert) => (
+                  <button
+                    className="ghost"
+                    key={alert.id}
+                    onClick={() => seek(alert.start_offset)}
+                  >
+                    {labels[alert.slug]} · {alert.start_offset.toFixed(1)}–
+                    {alert.end_offset.toFixed(1)}s
+                  </button>
+                ))}
+              </div>
+              <details>
+                <summary>Sampled observations and unknown periods</summary>
+                <div className="observations">
+                  {frames.map((frame) => (
+                    <button
+                      className="ghost"
+                      key={frame.timestamp}
+                      onClick={() => seek(frame.timestamp)}
+                    >
+                      {frame.timestamp.toFixed(1)}s ·{" "}
+                      {Object.values(frame.unknown).join("; ") ||
+                        frame.predictions
+                          .map(
+                            (prediction) =>
+                              prediction.unknown_reason ||
+                              `${labels[prediction.slug]}: ${prediction.detections.length} detections`,
+                          )
+                          .join("; ")}
+                    </button>
+                  ))}
+                </div>
+              </details>
+            </article>
+          ) : (
+            <div className="result-empty">
+              <Activity size={28} />
+              <h2>Results will appear here</h2>
+              <p>Choose an input and model version, then start a test.</p>
+            </div>
+          )}
+        </section>
       )}
     </section>
   );

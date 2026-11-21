@@ -128,8 +128,9 @@ Review status pending/confirmed/dismissed is distinct from model uncertainty. Al
 API /api/v1: auth/login/logout/me; locations; sources/start/stop/frames; uploads; jobs; incidents
 with type/date/location/status pagination; incident detail/review; evidence with range support;
 models; health/live and health/ready. Session/CSRF, consistent errors, safe paths and trusted RTSP hosts.
-React dashboard: webcam, uploads, health, filters, evidence and review, 2-second polling, honest
-empty/error/uncertain/evaluation states. No fabricated records or metrics.
+React dashboard: separate overview and testing pages. Testing supports webcam, recorded footage
+and still images with compatible model selection. Health, filters, evidence and review use
+2-second polling and honest empty/error/uncertain/evaluation states. No fabricated records or metrics.
 
 ## Dependencies, context and milestones
 

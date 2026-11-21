@@ -17,7 +17,8 @@ Flask /api/v1 exposes Supabase-mediated auth/CSRF, source/location creation, sta
 
 ## Inputs and outputs
 
-Input: authenticated JSON, bounded JPEG requests with sequence/clock headers, or multipart video. Output: structured JSON errors/results and conditional media delivery.
+Input: authenticated JSON, bounded JPEG requests with sequence/clock headers, or multipart
+video/still-image uploads. Output: structured JSON errors/results and conditional media delivery.
 
 ## Gotchas
 
@@ -28,6 +29,10 @@ The app factory registers resource blueprints in backend/routes. Security, reque
 Login now accepts email/password through Supabase; protected media and API calls retain same-origin cookies/CSRF. Logout destroys backend tokens even during provider outages.
 
 Jobs history/cancel/video/predictions/incidents/metrics and model-version listing are implemented. OpenAPI is generated and served at the authenticated /api/v1/openapi.json endpoint.
+
+Uploads accept MP4/MOV/MKV/AVI and JPEG/PNG/WebP. Images are pixel-bounded, decoded once and
+converted to a one-frame worker job. Live source start optionally accepts unique model slugs,
+allowing the testing page to choose active models without changing inference versions.
 
 OpenAPI now documents optional event ground truth and public job schemas; private session/credential tables remain excluded.
 

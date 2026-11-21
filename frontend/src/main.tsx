@@ -51,6 +51,7 @@ function App() {
   const capture = useCapture(sources, setError),
     generation = useRef(0);
   const [navOpen, setNavOpen] = useState(false);
+  const [view, setView] = useState<"overview" | "testing">("overview");
   useEffect(() => {
     if (!navOpen) return;
     const close = (event: KeyboardEvent) => {
@@ -131,6 +132,14 @@ function App() {
       setError((e as Error).message);
     }
   }
+  async function navigate(next: "overview" | "testing") {
+    if (view === "testing" && next !== view && capture.live) {
+      await run(capture.stop);
+    }
+    setView(next);
+    setNavOpen(false);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
   if (loading)
     return (
       <main className="signin">
@@ -138,7 +147,16 @@ function App() {
         <p>Connecting to SafeSight?</p>
       </main>
     );
-  if (!user) return <Authentication initialError={error} onLogin={(account) => { setError(""); setUser(account); }} />;
+  if (!user)
+    return (
+      <Authentication
+        initialError={error}
+        onLogin={(account) => {
+          setError("");
+          setUser(account);
+        }}
+      />
+    );
   return (
     <div className="shell">
       <aside>
@@ -164,27 +182,22 @@ function App() {
         >
           <small>SAFETY OPERATIONS / 01</small>
           <nav className="nav-links" aria-label="Primary">
-            <a
-              href="#incidents"
-              className="nav"
-              onClick={() => setNavOpen(false)}
+            <button
+              type="button"
+              className={"nav" + (view === "overview" ? " active" : "")}
+              aria-current={view === "overview" ? "page" : undefined}
+              onClick={() => navigate("overview")}
             >
-              Incident desk <ArrowUpRight size={16} />
-            </a>
-            <a
-              href="#capture"
-              className="nav"
-              onClick={() => setNavOpen(false)}
+              Safety overview <ArrowUpRight size={16} />
+            </button>
+            <button
+              type="button"
+              className={"nav" + (view === "testing" ? " active" : "")}
+              aria-current={view === "testing" ? "page" : undefined}
+              onClick={() => navigate("testing")}
             >
-              Source control <Radio size={16} />
-            </a>
-            <a
-              href="#testing"
-              className="nav"
-              onClick={() => setNavOpen(false)}
-            >
-              Video testing <Camera size={16} />
-            </a>
+              Testing lab <Camera size={16} />
+            </button>
           </nav>
           <div className="aside-bottom">
             <small>
@@ -216,129 +229,146 @@ function App() {
           </span>
           <span>{zone}</span>
         </header>
-        <section className="intro">
-          <div>
-            <p className="eyebrow">YOUR SAFETY DESK</p>
-            <h1>
-              See what needs
-              <br />
-              <em>your attention.</em>
-            </h1>
-          </div>
-          <div className="count">
-            <strong>{String(total).padStart(2, "0")}</strong>
-            <span>
-              incidents matching
-              <br />
-              your filters
-            </span>
-          </div>
-        </section>
-        {error && (
-          <div role="alert" className="error">
-            {error}
-            <button onClick={() => setError("")} aria-label="Dismiss error">
-              <X />
-            </button>
-          </div>
-        )}
-        {!worker && (
-          <p className="error" role="status">
-            Inference worker is offline. Captured frames cannot be analyzed
-            until it reconnects.
-          </p>
-        )}
-        {worker && models.fusion && !models.fusion.ready && (
-          <p>
-            Smoke-source fusion awaits joint validation. Unresolved smoke
-            remains reviewable.
-          </p>
-        )}
-        <section className="health" aria-label="Model readiness">
-          {slugs.map((slug) => (
-            <div key={slug}>
-              <span className={"dot " + (models[slug]?.ready ? "ok" : "")} />
-              <span>
-                {labels[slug]}
-                <small>
-                  {models[slug]?.ready
-                    ? models[slug]?.evaluation_only
-                      ? "Evaluation only"
-                      : "Ready"
-                    : "Unavailable"}
-                </small>
-                {models[slug]?.reason && <small>{models[slug].reason}</small>}
-              </span>
-            </div>
-          ))}
-        </section>
-        <Incidents
-          items={items}
-          locations={locations}
-          total={total}
-          page={page}
-          setPage={setPage}
-          filters={filters}
-          setFilters={setFilters}
-          zone={zone}
-          refresh={refresh}
-          onError={setError}
-        />
-        <section className="capture-grid" id="capture">
-          <article>
-            <div className="section-head">
-              <h2>
-                <Camera size={20} /> Live source
-              </h2>
-              <span>{capture.live ? "CAPTURING" : "STANDBY"}</span>
-            </div>
-            <video
-              ref={capture.video}
-              muted
-              playsInline
-              aria-label="Local camera preview"
-            />
-            <select
-              aria-label="Live source"
-              disabled={capture.live}
-              value={capture.sourceId}
-              onChange={(e) => capture.setSourceId(e.target.value)}
-            >
-              <option value="">Select camera source</option>
-              {sources
-                .filter((s) => s.kind !== "upload")
-                .map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name}
-                  </option>
-                ))}
-            </select>
-            <button
-              onClick={() => run(capture.live ? capture.stop : capture.start)}
-            >
-              {capture.live ? "Stop capture" : "Start capture"}{" "}
-              <Radio size={17} />
-            </button>
-            <p className="muted">
-              Camera permission is requested when you start. Audio is disabled.
-            </p>
-            {sources
-              .filter((s) => s.active)
-              .map((s) => (
-                <p key={s.id}>
-                  {s.name}: {s.health.status} ? {s.health.dropped_frames || 0}{" "}
-                  dropped frames
-                </p>
+        {view === "overview" ? (
+          <>
+            <section className="intro">
+              <div>
+                <p className="eyebrow">YOUR SAFETY DESK</p>
+                <h1>
+                  See what needs
+                  <br />
+                  <em>your attention.</em>
+                </h1>
+              </div>
+              <div className="count">
+                <strong>{String(total).padStart(2, "0")}</strong>
+                <span>
+                  incidents matching
+                  <br />
+                  your filters
+                </span>
+              </div>
+            </section>
+            {error && (
+              <div role="alert" className="error">
+                {error}
+                <button onClick={() => setError("")} aria-label="Dismiss error">
+                  <X />
+                </button>
+              </div>
+            )}
+            {!worker && (
+              <p className="error" role="status">
+                Inference worker is offline. Captured frames cannot be analyzed
+                until it reconnects.
+              </p>
+            )}
+            {worker && models.fusion && !models.fusion.ready && (
+              <p>
+                Smoke-source fusion awaits joint validation. Unresolved smoke
+                remains reviewable.
+              </p>
+            )}
+            <section className="health" aria-label="Model readiness">
+              {slugs.map((slug) => (
+                <div key={slug}>
+                  <span
+                    className={"dot " + (models[slug]?.ready ? "ok" : "")}
+                  />
+                  <span>
+                    {labels[slug]}
+                    <small>
+                      {models[slug]?.ready
+                        ? models[slug]?.evaluation_only
+                          ? "Evaluation only"
+                          : "Ready"
+                        : "Unavailable"}
+                    </small>
+                    {models[slug]?.reason && (
+                      <small>{models[slug].reason}</small>
+                    )}
+                  </span>
+                </div>
               ))}
-          </article>
-        </section>
-        <TestingWorkspace sources={sources} zone={zone} />
-        {user.role === "admin" && (
-          <WorkspaceSetup
+            </section>
+            <Incidents
+              items={items}
+              locations={locations}
+              total={total}
+              page={page}
+              setPage={setPage}
+              filters={filters}
+              setFilters={setFilters}
+              zone={zone}
+              refresh={refresh}
+              onError={setError}
+            />
+            <section className="capture-grid" id="capture">
+              <article>
+                <div className="section-head">
+                  <h2>
+                    <Camera size={20} /> Live source
+                  </h2>
+                  <span>{capture.live ? "CAPTURING" : "STANDBY"}</span>
+                </div>
+                <video
+                  ref={capture.video}
+                  muted
+                  playsInline
+                  aria-label="Local camera preview"
+                />
+                <select
+                  aria-label="Live source"
+                  disabled={capture.live}
+                  value={capture.sourceId}
+                  onChange={(e) => capture.setSourceId(e.target.value)}
+                >
+                  <option value="">Select camera source</option>
+                  {sources
+                    .filter((s) => s.kind !== "upload")
+                    .map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.name}
+                      </option>
+                    ))}
+                </select>
+                <button
+                  onClick={() =>
+                    run(capture.live ? capture.stop : capture.start)
+                  }
+                >
+                  {capture.live ? "Stop capture" : "Start capture"}{" "}
+                  <Radio size={17} />
+                </button>
+                <p className="muted">
+                  Camera permission is requested when you start. Audio is
+                  disabled.
+                </p>
+                {sources
+                  .filter((s) => s.active)
+                  .map((s) => (
+                    <p key={s.id}>
+                      {s.name}: {s.health.status} ?{" "}
+                      {s.health.dropped_frames || 0} dropped frames
+                    </p>
+                  ))}
+              </article>
+            </section>
+            {user.role === "admin" && (
+              <WorkspaceSetup
+                zone={zone}
+                locations={locations}
+                refresh={refresh}
+                onError={setError}
+              />
+            )}
+          </>
+        ) : (
+          <TestingWorkspace
+            sources={sources}
             zone={zone}
-            locations={locations}
-            refresh={refresh}
-            onError={setError}
+            models={models}
+            capture={capture}
           />
         )}
         <footer>

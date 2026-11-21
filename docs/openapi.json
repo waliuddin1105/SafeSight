@@ -1459,6 +1459,25 @@
             }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "models": {
+                    "description": "Optional active model slugs for this live session",
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
         "responses": {
           "200": {
             "description": "Successful response"
@@ -1556,6 +1575,7 @@
                     "type": "boolean"
                   },
                   "file": {
+                    "description": "MP4/MOV/MKV/AVI recording or JPEG/PNG/WebP still image",
                     "format": "binary",
                     "type": "string"
                   },
@@ -1590,7 +1610,7 @@
             "description": "Successful response"
           },
           "202": {
-            "description": "Recording queued with pinned model snapshot"
+            "description": "Video or still-image job queued with a pinned model snapshot"
           },
           "400": {
             "description": "Invalid input"

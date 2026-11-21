@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { api } from "./api";
-import type { Source } from "./types";
+import type { Slug, Source } from "./types";
 export function useCapture(
   sources: Source[],
   setError: (value: string) => void,
@@ -34,11 +34,19 @@ export function useCapture(
     if (sourceId)
       await api("/sources/" + sourceId + "/stop", { method: "POST" });
   }
-  async function start() {
+  async function start(models?: Slug[]) {
     if (!sourceId) throw new Error("Select a camera source first");
+    if (models && !models.length) throw new Error("Choose at least one model");
+    const startOptions = models
+      ? {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ models }),
+        }
+      : { method: "POST" };
     const source = sources.find((s) => s.id === sourceId);
     if (source?.kind !== "browser") {
-      await api("/sources/" + sourceId + "/start", { method: "POST" });
+      await api("/sources/" + sourceId + "/start", startOptions);
       setLive(true);
       return;
     }
@@ -47,7 +55,7 @@ export function useCapture(
       audio: false,
     });
     try {
-      await api("/sources/" + sourceId + "/start", { method: "POST" });
+      await api("/sources/" + sourceId + "/start", startOptions);
     } catch (e) {
       media.getTracks().forEach((t) => t.stop());
       throw e;
@@ -102,3 +110,5 @@ export function useCapture(
   }
   return { video, sourceId, setSourceId, live, start, stop };
 }
+
+export type CaptureController = ReturnType<typeof useCapture>;

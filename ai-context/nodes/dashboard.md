@@ -12,7 +12,8 @@ links:
 
 ## What, why and how
 
-React provides operational health, camera capture, uploads, filtered incidents, evidence and human review.
+React provides an operational overview for health/incidents/setup and a separate model-testing
+page for recorded footage, browser webcam and still-image inputs.
 
 ## Inputs and outputs
 
@@ -26,8 +27,13 @@ Incident rows and details show location. Camera loops stop on terminal session/s
 
 Login uses invited Supabase email/password through Flask. Browser tokens/localStorage are unnecessary; 401 returns to login and stops local capture.
 
-Typed API/auth/capture/incidents/setup/testing modules replace the monolithic component. Polling rejects stale responses; dates use configured timezone, and review dialogs trap/restore focus.
+Typed API/auth/capture/incidents/setup/testing modules replace the monolithic component. Page-level
+navigation separates routine review from controlled evaluation. Polling rejects stale responses;
+dates use configured timezone, and review dialogs trap/restore focus.
 
 Dashboard modules are formatted and distinguish collection responses from paginated lists. Optional supplied-ground-truth metrics are displayed separately from detection scores.
 
 Layout is responsive from 320px up: a compact sticky header exposes navigation and sign-out on small screens, filters and health cards reflow, forms stack, and incident rows become labelled cards below 640px. Wide tables scroll inside their container instead of expanding the page.
+
+The testing lab starts with an explicit input choice, then exposes only compatible model
+selectors. Webcam tests use active versions; recording/image jobs pin immutable versions.

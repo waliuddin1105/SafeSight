@@ -33,10 +33,14 @@ deployed pipeline metrics are separately labeled. tools/compare_models.py compar
 validation metrics only on matching real-data fingerprints and can write an explicit
 fallback recipe. It does not run training or select using test data.
 
-## P4-P6: recorded-video testing and maintainable dashboard
+## P4-P6: multi-input testing and maintainable dashboard
 
-The workspace selects one/multiple model versions, explicit evaluation testing,
-optional capture time, and optional event ground truth. Each job pins cards, hashes,
+The dedicated testing page starts with recorded footage, webcam or still image, then selects
+one/multiple compatible models. Recording/image jobs pin exact versions and explicit evaluation
+testing; webcam sessions select from active models. Still images become one-frame worker jobs so
+the API never performs inference. Entrance verification is unavailable for images because it
+requires time. The workspace also supports optional capture time and optional event ground truth.
+Each job pins cards, hashes,
 thresholds, preprocessing, sample rate, fusion and source/location rules. Model activation
 is unaffected. Authenticated APIs expose history, cancellation, ranged original video,
 paginated predictions and incident timelines. Playback overlays sampled boxes and lets

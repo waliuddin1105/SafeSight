@@ -107,7 +107,9 @@ def build(app) -> dict:
                     },
                 }
             if path.endswith("/uploads"):
-                operation["responses"]["202"] = {"description": "Recording queued with pinned model snapshot"}
+                operation["responses"]["202"] = {
+                    "description": "Video or still-image job queued with a pinned model snapshot"
+                }
                 operation["requestBody"] = {
                     "required": True,
                     "content": {
@@ -116,7 +118,11 @@ def build(app) -> dict:
                                 "type": "object",
                                 "required": ["file", "source_id"],
                                 "properties": {
-                                    "file": {"type": "string", "format": "binary"},
+                                    "file": {
+                                        "type": "string",
+                                        "format": "binary",
+                                        "description": "MP4/MOV/MKV/AVI recording or JPEG/PNG/WebP still image",
+                                    },
                                     "source_id": {"type": "string"},
                                     "models": {"type": "string", "description": "JSON array of model slugs"},
                                     "versions": {
@@ -126,6 +132,24 @@ def build(app) -> dict:
                                     "evaluation": {"type": "boolean"},
                                     "captured_at": {"type": "string", "format": "date-time"},
                                     "ground_truth": {"type": "string", "description": "Optional JSON object with events: slug, subtype, start/end seconds and normalized xyxy box"},
+                                },
+                            }
+                        }
+                    },
+                }
+            if path.endswith("/start"):
+                operation["requestBody"] = {
+                    "required": False,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "properties": {
+                                    "models": {
+                                        "type": "array",
+                                        "items": {"type": "string"},
+                                        "description": "Optional active model slugs for this live session",
+                                    }
                                 },
                             }
                         }
