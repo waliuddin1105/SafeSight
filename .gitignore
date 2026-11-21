@@ -22,5 +22,12 @@ models/**
 !models/**/README.md
 !models/**/.gitkeep
 !models/assets.json
+!models/**/versions/
+!models/**/versions/**/
+!models/**/versions/**/model_card.json
+!models/**/versions/**/*.pt
+!models/**/versions/**/*.pth
+!models/**/versions/**/*.onnx
+!models/**/versions/**/*.ts
 *.egg-info/
 .coverage

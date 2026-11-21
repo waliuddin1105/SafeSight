@@ -1,9 +1,39 @@
 # Sharing trained models
 
-Use a shared drive for versioned model ZIP bundles. Commit source/configuration and
-documentation to Git; keep datasets and binary models outside Git. No LFS or DVC
-setup is required. A shared-folder location/account is chosen by your team outside
-the application; no credentials or uploads are managed by SafeSight.
+Immutable versioned model cards are stored in normal Git and their large weight files
+are stored with Git LFS. This keeps every contributor's `models/SLUG/versions/RUN_ID`
+layout identical without committing large binaries as ordinary Git objects. Datasets,
+pretrained starting assets, active root cards and runtime artifacts remain outside LFS.
+
+Install Git LFS once on every development/training device, then clone or pull normally:
+
+```text
+git lfs install
+git pull --ff-only
+git lfs pull
+```
+
+Before committing a newly trained or imported version, keep its weights and card together
+under `models/SLUG/versions/RUN_ID/`. Confirm the binary is LFS-managed:
+
+```text
+git check-attr filter -- models/SLUG/versions/RUN_ID/best.pt
+git lfs status
+```
+
+The filter must be `lfs`. Commit the card and LFS pointer together. Never commit a card
+whose artifact is absent, outside its immutable version directory, or has a different
+SHA-256. GitHub LFS storage/bandwidth limits apply; repository owners must monitor them.
+
+The dashboard lists installed inactive versions for explicit video testing. Missing
+production activation is reported without machine-specific absolute paths. An unqualified
+version remains evaluation-only even when its LFS object is present.
+
+## Offline/shared-drive fallback
+
+The checksum-verified ZIP workflow remains available when Git LFS access is unavailable.
+Use a trusted shared drive for the bundle; no credentials or uploads are managed by
+SafeSight.
 
 On the training computer, export an existing run:
 

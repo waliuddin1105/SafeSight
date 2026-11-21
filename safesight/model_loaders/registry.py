@@ -266,8 +266,28 @@ class Registry:
             else:
                 self.pose = PoseExtractor(pose_path)
         for slug in selected if selected is not None else CLASSES:
+            relative_card = (selected or {}).get(slug, f"{slug}/model_card.json")
+            card_path = within(self.root, relative_card)
+            if cards is None and not card_path.is_file():
+                version_cards = sorted((self.root / slug / "versions").glob("*/model_card.json"))
+                if selected is None:
+                    if version_cards:
+                        count = len(version_cards)
+                        reason = (
+                            f"No production model is active; {count} installed version"
+                            f"{'s are' if count != 1 else ' is'} available for explicit video testing"
+                        )
+                    else:
+                        reason = "No model has been installed for this use case"
+                else:
+                    reason = "The selected model version is not installed on this device"
+                self.status[slug] = {
+                    "ready": False,
+                    "reason": reason,
+                    "available_versions": [path.parent.name for path in version_cards],
+                }
+                continue
             try:
-                card_path = within(self.root, (selected or {}).get(slug, f"{slug}/model_card.json"))
                 card = (
                     ModelCard.model_validate(cards[slug])
                     if cards is not None
@@ -290,6 +310,8 @@ class Registry:
                 if (card.synthetic or card.quality.get("status") != "PASS") and not evaluation:
                     raise ValueError("Model failed production gate; explicit evaluation mode required")
                 artifact = within(self.root, card.artifact)
+                if not artifact.is_file():
+                    raise ValueError("Model artifact referenced by the card is not installed on this device")
                 if hashlib.sha256(artifact.read_bytes()).hexdigest() != card.sha256:
                     raise ValueError("Model artifact checksum mismatch")
                 existing = (

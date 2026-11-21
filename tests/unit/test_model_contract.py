@@ -64,3 +64,62 @@ def test_replacement_requires_only_artifact_and_card(tmp_path, monkeypatch):
     registry = Registry(tmp_path, evaluation=True, device="cpu", selected={"body_state": "body_state/model_card.json"})
     assert not registry.status["body_state"]["ready"]
     registry.close()
+
+
+def test_missing_active_cards_report_portable_actionable_status(tmp_path):
+    version = tmp_path / "fire_smoke/versions/evaluation-run"
+    version.mkdir(parents=True)
+    (version / "model_card.json").write_text("{}", encoding="utf-8")
+
+    registry = Registry(tmp_path, evaluation=False, device="cpu")
+    try:
+        assert registry.status["body_state"] == {
+            "ready": False,
+            "reason": "No model has been installed for this use case",
+            "available_versions": [],
+        }
+        assert registry.status["fire_smoke"] == {
+            "ready": False,
+            "reason": "No production model is active; 1 installed version is available for explicit video testing",
+            "available_versions": ["evaluation-run"],
+        }
+        assert str(tmp_path) not in registry.status["fire_smoke"]["reason"]
+    finally:
+        registry.close()
+
+
+def test_missing_selected_card_and_artifact_do_not_expose_device_paths(tmp_path):
+    missing = Registry(
+        tmp_path,
+        evaluation=True,
+        device="cpu",
+        selected={"fire_smoke": "fire_smoke/versions/missing/model_card.json"},
+    )
+    assert missing.status["fire_smoke"]["reason"] == "The selected model version is not installed on this device"
+    missing.close()
+
+    folder = tmp_path / "fire_smoke/versions/imported"
+    folder.mkdir(parents=True)
+    card = {
+        "slug": "fire_smoke",
+        "loader": "ultralytics",
+        "architecture": "fixture",
+        "classes": CLASSES["fire_smoke"],
+        "artifact": "fire_smoke/versions/imported/missing.pt",
+        "sha256": "0" * 64,
+        "run_id": "imported",
+        "input_size": 32,
+        "thresholds": {},
+        "quality": {"status": "FAIL"},
+    }
+    (folder / "model_card.json").write_text(json.dumps(card), encoding="utf-8")
+    registry = Registry(
+        tmp_path,
+        evaluation=True,
+        device="cpu",
+        selected={"fire_smoke": "fire_smoke/versions/imported/model_card.json"},
+    )
+    assert registry.status["fire_smoke"]["reason"] == (
+        "Model artifact referenced by the card is not installed on this device"
+    )
+    registry.close()

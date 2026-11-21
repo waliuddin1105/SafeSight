@@ -1,0 +1,5 @@
+# Immutable trained-model binaries are shared through Git LFS, never ordinary Git blobs.
+models/**/versions/**/*.pt filter=lfs diff=lfs merge=lfs -text
+models/**/versions/**/*.pth filter=lfs diff=lfs merge=lfs -text
+models/**/versions/**/*.onnx filter=lfs diff=lfs merge=lfs -text
+models/**/versions/**/*.ts filter=lfs diff=lfs merge=lfs -text

@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "slug": "fire_smoke",
+  "loader": "ultralytics",
+  "architecture": "yolo11m",
+  "classes": [
+    "smoke",
+    "fire"
+  ],
+  "artifact": "fire_smoke/versions/imported-5fa16ec75c6b/best.pt",
+  "sha256": "5fa16ec75c6b5559cceff7f5672c755faccecaf3ed5f53fe6c40839728ec8120",
+  "run_id": "imported-5fa16ec75c6b",
+  "input_size": 640,
+  "thresholds": {},
+  "quality": {
+    "status": "FAIL",
+    "reasons": [
+      "Imported checkpoint has not been qualified on SafeSight validation and untouched test recordings.",
+      "Alert thresholds have not been calibrated to the configured target precision."
+    ]
+  },
+  "synthetic": false,
+  "preprocessing": "v1",
+  "metrics": {},
+  "software_verification": {
+    "verified_at": "2026-11-21T16:54:00+05:00",
+    "registry_load": "PASS",
+    "fixture_images_processed": 15,
+    "invalid_outputs": 0,
+    "detections_on_synthetic_fixtures": 0,
+    "note": "Synthetic fixtures verify execution and output contracts only; they do not measure real-world accuracy."
+  },
+  "calibration": {
+    "status": "NOT_RUN"
+  },
+  "dataset": {
+    "fingerprint": null,
+    "provenance": "User-provided checkpoint; training dataset provenance was not supplied."
+  },
+  "library_versions": {
+    "torch_inspected_with": "2.7.1+cpu",
+    "ultralytics_inspected_with": "8.3.200"
+  },
+  "created_at": "2026-11-21T16:45:57+05:00",
+  "known_limitations": [
+    "The detector contains only smoke and fire classes; person context must come from other inference context.",
+    "Accuracy, alert precision, alert recall, and operating thresholds are unverified."
+  ]
+}

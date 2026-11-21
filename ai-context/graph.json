@@ -135,6 +135,18 @@
       "path": "decisions/0011-two-class-fire-smoke.md"
     },
     {
+      "id": "adr-0012",
+      "type": "decision",
+      "status": "accepted",
+      "links": [
+        "artifacts",
+        "deployment",
+        "quality",
+        "adr-0006"
+      ],
+      "path": "decisions/0012-git-lfs-model-versions.md"
+    },
+    {
       "id": "index",
       "type": "index",
       "status": "implemented",
@@ -198,6 +210,7 @@
       "status": "implemented",
       "links": [
         "adr-0006",
+        "adr-0012",
         "architecture",
         "verification"
       ],
@@ -757,6 +770,22 @@
       "to": "verification"
     },
     {
+      "from": "adr-0012",
+      "to": "artifacts"
+    },
+    {
+      "from": "adr-0012",
+      "to": "deployment"
+    },
+    {
+      "from": "adr-0012",
+      "to": "quality"
+    },
+    {
+      "from": "adr-0012",
+      "to": "adr-0006"
+    },
+    {
       "from": "index",
       "to": "architecture"
     },
@@ -895,6 +924,10 @@
     {
       "from": "artifacts",
       "to": "adr-0006"
+    },
+    {
+      "from": "artifacts",
+      "to": "adr-0012"
     },
     {
       "from": "artifacts",

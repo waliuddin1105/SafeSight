@@ -66,6 +66,7 @@ export interface ModelStatus {
   ready: boolean;
   evaluation_only?: boolean;
   reason?: string;
+  available_versions?: string[];
 }
 export interface AuthResponse {
   user: User | null;
