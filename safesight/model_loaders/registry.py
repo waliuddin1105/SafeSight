@@ -65,6 +65,45 @@ class Adapter(Protocol):
     def predict(self, rgb: np.ndarray, timestamp: float) -> Prediction: ...
 
 
+def _intersection_over_smaller(a: tuple[float, ...], b: tuple[float, ...]) -> float:
+    """Measure how completely the smaller normalized box is covered."""
+    intersection = max(0.0, min(a[2], b[2]) - max(a[0], b[0])) * max(
+        0.0, min(a[3], b[3]) - max(a[1], b[1])
+    )
+    area_a = max(0.0, a[2] - a[0]) * max(0.0, a[3] - a[1])
+    area_b = max(0.0, b[2] - b[0]) * max(0.0, b[3] - b[1])
+    smaller = min(area_a, area_b)
+    return intersection / smaller if smaller else 0.0
+
+
+def deduplicate_detections(
+    detections: list[Detection],
+    iou_threshold: float = 0.45,
+    containment_threshold: float = 0.8,
+) -> list[Detection]:
+    """Keep the strongest box in each same-class overlap cluster.
+
+    Ordinary NMS does not always remove a small box nested inside a much larger
+    box because their IoU can remain low. The containment check handles that
+    case without suppressing legitimate overlap between different classes.
+    """
+    from safesight.inference.engine import iou
+
+    kept: list[Detection] = []
+    for detection in sorted(detections, key=lambda item: item.score, reverse=True):
+        duplicate = any(
+            detection.label == previous.label
+            and (
+                iou(detection.box, previous.box) >= iou_threshold
+                or _intersection_over_smaller(detection.box, previous.box) >= containment_threshold
+            )
+            for previous in kept
+        )
+        if not duplicate:
+            kept.append(detection)
+    return kept
+
+
 def letterbox(rgb: np.ndarray, size: int) -> np.ndarray:
     """Aspect-preserving resize used identically for train and runtime sequences."""
     h, w = rgb.shape[:2]
@@ -131,13 +170,24 @@ class YoloAdapter:
         from ultralytics import YOLO
 
         self.card, self.device = card, device
+        postprocessing = (card.model_extra or {}).get("postprocessing", {})
+        self.nms_iou = float(postprocessing.get("nms_iou", 0.45))
+        self.containment_threshold = float(postprocessing.get("containment_threshold", 0.8))
+        if not 0 < self.nms_iou <= 1 or not 0 < self.containment_threshold <= 1:
+            raise ValueError("Detection post-processing thresholds must be in (0, 1]")
         self.model = YOLO(str(artifact), task="detect")
         if list(self.model.names.values()) != card.classes:
             raise ValueError("Weights and model-card classes differ")
 
     def predict(self, rgb: np.ndarray, timestamp: float) -> Prediction:
         result = self.model.predict(
-            rgb[:, :, ::-1], imgsz=self.card.input_size, device=self.device, conf=0.01, verbose=False
+            rgb[:, :, ::-1],
+            imgsz=self.card.input_size,
+            device=self.device,
+            conf=0.01,
+            iou=self.nms_iou,
+            agnostic_nms=False,
+            verbose=False,
         )[0]
         detections = [
             Detection(self.card.classes[int(c)], float(s), tuple(map(float, b)))
@@ -185,6 +235,11 @@ class YoloAdapter:
 
                     if not any(d.label == label and iou(d.box, mapped) > 0.5 and d.score >= score for d in detections):
                         detections.append(Detection(label, float(score), mapped))
+        detections = deduplicate_detections(
+            detections,
+            iou_threshold=self.nms_iou,
+            containment_threshold=self.containment_threshold,
+        )
         return Prediction(self.card.slug, timestamp, detections=detections, model_version=self.card.run_id)
 
 

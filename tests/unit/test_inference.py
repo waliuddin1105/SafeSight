@@ -3,7 +3,7 @@
 from safesight.config import read_yaml, ROOT
 from safesight.contracts import Candidate, Detection, Prediction
 from safesight.inference.engine import Engine, Temporal
-from safesight.model_loaders.registry import Registry
+from safesight.model_loaders.registry import Registry, deduplicate_detections
 
 
 def test_temporal_persistence_and_gap():
@@ -36,3 +36,29 @@ def test_synthetic_models_rejected_in_production():
         assert all(not state["ready"] for state in registry.status.values())
     finally:
         registry.close()
+
+
+def test_detection_deduplication_preserves_cross_class_overlap():
+    detections = [
+        Detection("fire", 0.95, (0.1, 0.1, 0.5, 0.5)),
+        Detection("fire", 0.70, (0.12, 0.12, 0.48, 0.48)),
+        Detection("fire", 0.60, (0.7, 0.7, 0.9, 0.9)),
+        Detection("smoke", 0.80, (0.1, 0.1, 0.5, 0.5)),
+    ]
+
+    result = deduplicate_detections(detections)
+
+    assert [(item.label, item.score) for item in result] == [
+        ("fire", 0.95),
+        ("smoke", 0.80),
+        ("fire", 0.60),
+    ]
+
+
+def test_detection_deduplication_removes_nested_box_with_low_iou():
+    detections = [
+        Detection("smoke", 0.90, (0.05, 0.05, 0.95, 0.95)),
+        Detection("smoke", 0.75, (0.40, 0.40, 0.55, 0.55)),
+    ]
+
+    assert deduplicate_detections(detections) == [detections[0]]

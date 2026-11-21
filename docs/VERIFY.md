@@ -148,6 +148,14 @@ No training entrypoint or optimizer was executed in this pass.
   an image build and non-training checks, but CI has not been run remotely in this session.
 - M8 is outside this requested pass.
 
+## Detection box deduplication
+
+2026-11-21: YOLO runtime output now uses class-aware NMS plus containment-aware
+deduplication. Unit coverage verifies that lower-confidence same-class overlapping and
+nested boxes are removed, spatially separate boxes remain, and legitimate fire/smoke
+cross-class overlap is preserved. This is output cleanup only; it does not establish or
+change measured model accuracy. No training entrypoint was run.
+
 ## Recovery behavior
 
 The initial volatile-window limitation is superseded by ADR 0003. PostgreSQL snapshots
