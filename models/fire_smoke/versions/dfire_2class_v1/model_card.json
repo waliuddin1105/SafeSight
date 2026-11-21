@@ -1,0 +1,30 @@
+{
+    "schema_version":  1,
+    "slug":  "fire_smoke",
+    "loader":  "ultralytics",
+    "architecture":  "yolo11m",
+    "classes":  [
+                    "smoke",
+                    "fire"
+                ],
+    "artifact":  "fire_smoke/versions/dfire_2class_v1/best.pt",
+    "sha256":  "5fa16ec75c6b5559cceff7f5672c755faccecaf3ed5f53fe6c40839728ec8120",
+    "run_id":  "dfire_2class_v1",
+    "input_size":  640,
+    "thresholds":  {
+                       "fire":  0.25,
+                       "hazardous_smoke":  0.5,
+                       "uncertain_smoke":  0.5
+                   },
+    "quality":  {
+                    "status":  "FAIL",
+                    "reasons":  [
+                                    "Trained outside this repository; not qualified on this project\u0027s events"
+                                ]
+                },
+    "synthetic":  false,
+    "preprocessing":  "v1",
+    "metrics":  {
+
+                }
+}
