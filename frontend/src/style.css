@@ -8,8 +8,17 @@
 * {
   box-sizing: border-box;
 }
+html {
+  -webkit-text-size-adjust: 100%;
+}
 body {
   margin: 0;
+  min-width: 320px;
+  overflow-wrap: break-word;
+}
+img,
+video {
+  max-width: 100%;
 }
 button,
 input,
@@ -28,6 +37,7 @@ button {
   align-items: center;
   justify-content: center;
   gap: 10px;
+  max-width: 100%;
 }
 button:hover {
   filter: brightness(1.15);
@@ -45,6 +55,8 @@ textarea {
   background: #fff;
   color: #253a30;
   width: 100%;
+  min-width: 0;
+  max-width: 100%;
 }
 label {
   display: block;
@@ -80,8 +92,9 @@ h1 em {
 }
 .shell {
   display: grid;
-  grid-template-columns: 235px 1fr;
+  grid-template-columns: 235px minmax(0, 1fr);
   min-height: 100vh;
+  min-height: 100dvh;
 }
 aside {
   background: #1c3028;
@@ -90,6 +103,25 @@ aside {
   position: fixed;
   inset: 0 auto 0 0;
   width: 235px;
+  z-index: 30;
+}
+.aside-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.aside-panel {
+  display: block;
+}
+.nav-toggle {
+  display: none;
+  color: #f0f1df;
+  border-color: #56654f;
+  padding: 8px 10px;
+}
+.nav-links {
+  display: block;
 }
 .brand {
   display: flex;
@@ -98,11 +130,13 @@ aside {
   font-size: 24px;
   font-weight: 800;
   letter-spacing: -1px;
+  min-width: 0;
 }
 .brand svg {
   color: #c9e49c;
+  flex-shrink: 0;
 }
-aside > small {
+.aside-panel > small {
   font-size: 9px;
   margin: 22px 0 58px;
   letter-spacing: 1.2px;
@@ -112,11 +146,15 @@ aside > small {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 12px;
   padding: 15px 8px;
   text-decoration: none;
   color: #e0e8da;
   font-size: 13px;
   border-bottom: 1px solid #394b40;
+}
+.nav svg {
+  flex-shrink: 0;
 }
 .aside-bottom {
   position: absolute;
@@ -133,12 +171,20 @@ aside > small {
 .aside-bottom small {
   color: #b6c0b2;
   margin-bottom: 12px;
+  overflow-wrap: anywhere;
+}
+.aside-bottom .ghost {
+  width: 100%;
 }
 main {
   grid-column: 2;
   padding: 0 48px;
   max-width: 1600px;
   width: 100%;
+  min-width: 0;
+}
+section[id] {
+  scroll-margin-top: 24px;
 }
 header {
   height: 75px;
@@ -146,9 +192,19 @@ header {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 16px;
+  min-width: 0;
   font-size: 10px;
   letter-spacing: 1px;
   color: #637160;
+}
+header span {
+  min-width: 0;
+}
+header > span:first-child {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 header i {
   display: inline-block;
@@ -162,6 +218,7 @@ header i {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 24px;
   padding: 40px 0 10px;
 }
 .eyebrow {
@@ -174,11 +231,13 @@ header i {
   display: flex;
   align-items: center;
   gap: 17px;
+  flex-shrink: 0;
 }
 .count strong {
   font-size: 80px;
   font-weight: 400;
   letter-spacing: -6px;
+  line-height: 0.9;
 }
 .count span {
   font-size: 11px;
@@ -187,7 +246,7 @@ header i {
 }
 .health {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   padding: 21px 0;
   border-top: 1px solid #d5dacc;
   border-bottom: 1px solid #d5dacc;
@@ -197,8 +256,17 @@ header i {
 .health > div {
   display: flex;
   gap: 9px;
-  align-items: center;
+  align-items: flex-start;
+  min-width: 0;
   font-size: 12px;
+}
+.health > div > span:last-child {
+  min-width: 0;
+}
+.health small {
+  font-size: 10px;
+  margin-top: 4px;
+  overflow-wrap: anywhere;
 }
 .dot {
   width: 7px;
@@ -206,23 +274,28 @@ header i {
   background: #b3b5a7;
   border-radius: 50%;
   flex-shrink: 0;
+  margin-top: 5px;
 }
 .dot.ok {
   background: #4b8351;
-}
-.health small {
-  font-size: 10px;
-  margin-top: 4px;
 }
 .section-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px 20px;
 }
 .section-head h2 {
   display: flex;
   align-items: center;
   gap: 9px;
+  min-width: 0;
+  margin: 10px 0;
+}
+.section-head h2,
+.section-head h3 {
+  overflow-wrap: anywhere;
 }
 .section-head > span {
   font-size: 10px;
@@ -230,11 +303,12 @@ header i {
 }
 .filters {
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr 1.2fr 1.2fr;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 10px;
   margin: 8px 0 20px;
 }
 .filters label {
+  min-width: 0;
   text-transform: capitalize;
   color: #637160;
 }
@@ -269,8 +343,15 @@ td b {
   border: 1px solid #dce0d4;
   border-radius: 4px;
   overflow: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+}
+.table-wrap:focus-visible {
+  outline: 3px solid #a0b77d;
+  outline-offset: 3px;
 }
 .badge {
+  display: inline-block;
   border-radius: 3px;
   padding: 5px 9px;
   text-transform: capitalize;
@@ -318,7 +399,7 @@ td b {
 }
 .capture-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
   gap: 24px;
 }
 .capture-grid article {
@@ -326,6 +407,7 @@ td b {
   background: #fafbf6;
   padding: 22px;
   border-radius: 4px;
+  min-width: 0;
 }
 .capture-grid video {
   width: 100%;
@@ -361,12 +443,21 @@ td b {
 }
 .setup form {
   display: flex;
-  align-items: end;
+  align-items: flex-end;
+  flex-wrap: wrap;
   gap: 15px;
   margin: 12px 0;
 }
 .setup label {
-  flex: 1;
+  flex: 1 1 220px;
+  min-width: 0;
+}
+.setup label.wide,
+.setup fieldset {
+  flex: 1 0 100%;
+}
+.setup form button {
+  flex: 0 0 auto;
 }
 footer {
   padding: 35px 0;
@@ -381,6 +472,10 @@ footer span {
   font-weight: 400;
 }
 .error {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
   padding: 12px 16px;
   background: #f3e2d9;
   color: #8c4430;
@@ -390,7 +485,7 @@ footer span {
   margin: 10px 0;
 }
 .error > button {
-  float: right;
+  flex-shrink: 0;
   background: none;
   border: 0;
   color: inherit;
@@ -401,12 +496,15 @@ footer span {
   flex-direction: column;
   justify-content: center;
   max-width: 650px;
+  width: 100%;
   min-height: 100vh;
+  min-height: 100dvh;
   margin: auto;
-  padding: 50px;
+  padding: clamp(24px, 6vw, 50px);
 }
 .signin .brand {
-  margin-bottom: 65px;
+  margin-bottom: clamp(30px, 8vh, 65px);
+  flex-wrap: wrap;
 }
 .signin .brand span {
   font-size: 9px;
@@ -416,6 +514,7 @@ footer span {
 }
 .signin form {
   max-width: 360px;
+  width: 100%;
 }
 .signin label {
   margin: 15px 0;
@@ -436,12 +535,14 @@ footer span {
   justify-content: center;
   align-items: center;
   padding: 25px;
-  z-index: 10;
+  z-index: 50;
+  overflow-y: auto;
 }
 .modal {
   width: 650px;
   max-width: 100%;
   max-height: 90vh;
+  max-height: 90dvh;
   overflow: auto;
   background: #f7f8f0;
   padding: 35px;
@@ -451,106 +552,27 @@ footer span {
 .modal img,
 .modal video {
   width: 100%;
+  height: auto;
   margin: 10px 0;
 }
 .modal .close {
   position: absolute;
   right: 15px;
   top: 15px;
+  z-index: 1;
 }
 .modal textarea {
   min-height: 80px;
 }
 .actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 10px;
   margin: 15px 0;
 }
-:focus-visible {
-  outline: 3px solid #a0b77d;
-  outline-offset: 3px;
+.actions button {
+  flex: 1 1 140px;
 }
-@media (max-width: 1100px) {
-  main {
-    padding: 0 25px;
-  }
-  .shell {
-    grid-template-columns: 190px 1fr;
-  }
-  aside {
-    width: 190px;
-    padding: 25px 18px;
-  }
-  .health {
-    grid-template-columns: repeat(3, 1fr);
-  }
-  .filters {
-    grid-template-columns: repeat(3, 1fr);
-  }
-  .count strong {
-    font-size: 60px;
-  }
-}
-@media (max-width: 760px) {
-  .shell {
-    display: block;
-  }
-  aside {
-    position: relative;
-    width: 100%;
-    padding: 20px;
-    display: flex;
-    align-items: center;
-    gap: 20px;
-  }
-  .aside-bottom,
-  aside > small,
-  aside .nav {
-    display: none;
-  }
-  main {
-    padding: 0 18px;
-  }
-  .intro {
-    padding-top: 25px;
-  }
-  .count {
-    display: none;
-  }
-  .health {
-    grid-template-columns: repeat(2, 1fr);
-  }
-  .filters {
-    grid-template-columns: 1fr 1fr;
-  }
-  .capture-grid {
-    grid-template-columns: 1fr;
-  }
-  .setup form {
-    flex-wrap: wrap;
-  }
-  .setup label {
-    flex-basis: 45%;
-  }
-  header > span:last-child {
-    display: none;
-  }
-  footer span {
-    float: none;
-    display: block;
-    margin-top: 10px;
-  }
-  .section-head > span {
-    display: none;
-  }
-  .modal {
-    padding: 25px;
-  }
-  h1 {
-    letter-spacing: -1.5px;
-  }
-}
-
 .testing {
   margin: 44px 0;
   padding: 28px;
@@ -560,7 +582,7 @@ footer span {
 }
 .testing-grid {
   display: grid;
-  grid-template-columns: minmax(260px, 1fr) minmax(240px, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
   gap: 32px;
 }
 .testing form label {
@@ -594,6 +616,12 @@ footer span {
   text-align: left;
   width: 100%;
   margin: 6px 0;
+  white-space: normal;
+  line-height: 1.5;
+}
+.job-history button span,
+.job-history button small {
+  overflow-wrap: anywhere;
 }
 .job-history .selected {
   background: #d2dfc5;
@@ -643,25 +671,328 @@ footer span {
 }
 .observations button {
   justify-content: flex-start;
+  text-align: left;
+  white-space: normal;
+  line-height: 1.5;
 }
 .setup textarea {
   min-height: 90px;
 }
-.setup form {
-  align-items: end;
-  flex-wrap: wrap;
+:focus-visible {
+  outline: 3px solid #a0b77d;
+  outline-offset: 3px;
 }
-.setup fieldset {
-  flex: 1 0 100%;
+@media (max-width: 1100px) {
+  main {
+    padding: 0 25px;
+  }
+  .shell {
+    grid-template-columns: 190px minmax(0, 1fr);
+  }
+  aside {
+    width: 190px;
+    padding: 25px 18px;
+  }
+  .aside-bottom {
+    left: 18px;
+    right: 18px;
+  }
+  .health {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .filters {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .count strong {
+    font-size: 60px;
+  }
 }
-@media (max-width: 760px) {
+@media (max-width: 900px) {
+  .capture-grid {
+    grid-template-columns: 1fr;
+  }
+  table {
+    min-width: 680px;
+  }
+}
+@media (max-width: 860px) {
+  .shell {
+    display: block;
+  }
+  aside {
+    position: sticky;
+    inset: auto;
+    top: 0;
+    width: 100%;
+    padding: 0;
+  }
+  .aside-top {
+    padding: 14px 18px;
+  }
+  .nav-toggle {
+    display: inline-flex;
+  }
+  .aside-panel {
+    display: none;
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    padding: 4px 18px 18px;
+    background: #1c3028;
+    border-top: 1px solid #394b40;
+    box-shadow: 0 18px 30px #00000040;
+    max-height: calc(100dvh - 60px);
+    overflow: auto;
+  }
+  .aside-panel.open {
+    display: block;
+  }
+  .aside-panel > small {
+    margin: 10px 0 14px;
+  }
+  .aside-panel .nav {
+    padding: 14px 4px;
+  }
+  .aside-bottom {
+    position: static;
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px solid #394b40;
+  }
+  .aside-bottom p {
+    font-size: 16px;
+  }
+  main {
+    padding: 0 18px;
+  }
+  section[id] {
+    scroll-margin-top: 76px;
+  }
+  header {
+    height: 60px;
+  }
+  .intro {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 16px;
+    padding-top: 25px;
+  }
+  .intro h1 {
+    margin-bottom: 0;
+  }
+  .count {
+    display: flex;
+    gap: 12px;
+  }
+  .count strong {
+    font-size: 48px;
+    letter-spacing: -3px;
+  }
+  .count span {
+    font-size: 10px;
+  }
+  .health {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .filters {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .capture-grid {
+    grid-template-columns: 1fr;
+  }
+  .setup label {
+    flex-basis: 45%;
+  }
+  header > span:last-child {
+    display: none;
+  }
+  footer span {
+    float: none;
+    display: block;
+    margin-top: 10px;
+  }
+  .section-head > span {
+    display: none;
+  }
+  .modal {
+    padding: 25px;
+  }
+  h1 {
+    letter-spacing: -1.5px;
+  }
   .testing {
     padding: 18px;
+    margin: 32px 0;
   }
   .testing-grid {
-    grid-template-columns: 1fr;
+    gap: 22px;
   }
   .job-history {
     max-height: 220px;
   }
 }
+@media (max-width: 640px) {
+  .table-wrap {
+    background: transparent;
+    border: 0;
+    overflow: visible;
+  }
+  table {
+    min-width: 0;
+  }
+  table,
+  tbody,
+  tr,
+  td {
+    display: block;
+    width: 100%;
+  }
+  thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+    border: 0;
+  }
+  tbody tr {
+    background: #fafbf6;
+    border: 1px solid #dce0d4;
+    border-radius: 6px;
+    padding: 10px 14px;
+    margin-bottom: 12px;
+  }
+  td {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 18px;
+    padding: 8px 0;
+    border-bottom: 1px dashed #dce0d4;
+    text-align: right;
+  }
+  td:last-child {
+    border-bottom: 0;
+    padding-top: 12px;
+    padding-bottom: 0;
+  }
+  td::before {
+    content: attr(data-label);
+    flex: 0 0 38%;
+    padding-top: 2px;
+    font-size: 9px;
+    font-weight: 500;
+    letter-spacing: 1.1px;
+    text-transform: uppercase;
+    color: #75816d;
+    text-align: left;
+  }
+  td > span {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 4px;
+    min-width: 0;
+  }
+  td small {
+    margin-top: 0;
+  }
+  td:last-child::before {
+    display: none;
+  }
+  td:last-child > button {
+    width: 100%;
+  }
+  .pagination {
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 24px;
+  }
+  .modal-backdrop {
+    align-items: flex-start;
+    padding: 10px;
+  }
+  .modal {
+    max-height: calc(100dvh - 20px);
+    padding: 24px 18px;
+  }
+  .modal .close {
+    right: 10px;
+    top: 10px;
+  }
+  .testing {
+    padding: 16px;
+  }
+  .capture-grid article {
+    padding: 18px;
+  }
+  .setup form {
+    align-items: stretch;
+  }
+  .setup label {
+    flex-basis: 100%;
+  }
+  .setup form button {
+    width: 100%;
+  }
+}
+@media (max-width: 520px) {
+  main {
+    padding: 0 14px;
+  }
+  .filters {
+    grid-template-columns: 1fr;
+  }
+  .health {
+    grid-template-columns: 1fr;
+  }
+  .intro h1 {
+    font-size: clamp(30px, 9vw, 38px);
+  }
+  .count strong {
+    font-size: 44px;
+  }
+  .signin {
+    padding: 24px 18px;
+  }
+  .signin .brand {
+    margin-bottom: 36px;
+  }
+  .signin form {
+    max-width: none;
+  }
+  .modal-backdrop {
+    padding: 8px;
+  }
+  .modal {
+    max-height: calc(100dvh - 16px);
+    padding: 22px 14px;
+  }
+  .actions button {
+    flex-basis: 100%;
+  }
+  .testing {
+    padding: 14px;
+    margin: 28px 0;
+  }
+  .testing-grid {
+    gap: 18px;
+  }
+  .capture-grid article {
+    padding: 16px;
+  }
+  .error {
+    padding: 10px 12px;
+  }
+  .job-history {
+    max-height: 200px;
+  }
+  footer {
+    padding: 28px 0;
+  }
+}
+

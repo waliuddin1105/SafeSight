@@ -134,44 +134,59 @@ export function Incidents({
             </label>
           ))}
         </div>
-        <div className="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Behavior / evidence</th>
-                <th>Recorded</th>
-                <th>Location</th>
-                <th>Detection score</th>
-                <th>Review</th>
-                <th />
+        <div
+          className="table-wrap"
+          role="region"
+          aria-label="Incident register table"
+          tabIndex={0}
+        >
+          <table role="table" aria-label="Incident register">
+            <thead role="rowgroup">
+              <tr role="row">
+                <th role="columnheader">Behavior / evidence</th>
+                <th role="columnheader">Recorded</th>
+                <th role="columnheader">Location</th>
+                <th role="columnheader">Detection score</th>
+                <th role="columnheader">Review</th>
+                <th role="columnheader" />
               </tr>
             </thead>
-            <tbody>
+            <tbody role="rowgroup">
               {items.map((item) => (
-                <tr key={item.id}>
-                  <td>
-                    <b>{labels[item.slug]}</b>
-                    <small>
-                      {item.subtype.replaceAll("_", " ")}
-                      {item.uncertain ? " ? uncertain" : ""}
-                      {item.evaluation_only ? " ? evaluation" : ""}
-                    </small>
-                  </td>
-                  <td>
-                    {date(item.start_at, zone)}
-                    <small>Video +{item.start_offset.toFixed(1)}s</small>
-                  </td>
-                  <td>
-                    {locations.find((l) => l.id === item.location_id)?.name ||
-                      "Unknown location"}
-                  </td>
-                  <td>{Math.round(item.score * 100)}%</td>
-                  <td>
-                    <span className={"badge " + item.review_status}>
-                      {item.review_status}
+                <tr key={item.id} role="row">
+                  <td role="cell" data-label="Behavior / evidence">
+                    <span>
+                      <b>{labels[item.slug]}</b>
+                      <small>
+                        {item.subtype.replaceAll("_", " ")}
+                        {item.uncertain ? " ? uncertain" : ""}
+                        {item.evaluation_only ? " ? evaluation" : ""}
+                      </small>
                     </span>
                   </td>
-                  <td>
+                  <td role="cell" data-label="Recorded">
+                    <span>
+                      {date(item.start_at, zone)}
+                      <small>Video +{item.start_offset.toFixed(1)}s</small>
+                    </span>
+                  </td>
+                  <td role="cell" data-label="Location">
+                    <span>
+                      {locations.find((l) => l.id === item.location_id)?.name ||
+                        "Unknown location"}
+                    </span>
+                  </td>
+                  <td role="cell" data-label="Detection score">
+                    <span>{Math.round(item.score * 100)}%</span>
+                  </td>
+                  <td role="cell" data-label="Review">
+                    <span>
+                      <span className={"badge " + item.review_status}>
+                        {item.review_status}
+                      </span>
+                    </span>
+                  </td>
+                  <td role="cell">
                     <button className="ghost" onClick={() => open(item.id)}>
                       Review <ArrowUpRight size={16} />
                     </button>

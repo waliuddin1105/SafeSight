@@ -67,7 +67,7 @@ export function WorkspaceSetup({
           Timezone
           <input name="timezone" defaultValue={zone} required />
         </label>
-        <label>
+        <label className="wide">
           Location policies (JSON)
           <textarea name="policies" defaultValue="{}" />
         </label>

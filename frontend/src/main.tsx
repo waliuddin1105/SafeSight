@@ -1,6 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { ShieldCheck, Radio, ArrowUpRight, X, Camera } from "lucide-react";
+import {
+  ShieldCheck,
+  Radio,
+  ArrowUpRight,
+  X,
+  Camera,
+  Menu,
+} from "lucide-react";
 import { api, setCsrf } from "./api";
 import { Authentication } from "./Authentication";
 import { useCapture } from "./capture";
@@ -43,6 +50,16 @@ function App() {
   });
   const capture = useCapture(sources, setError),
     generation = useRef(0);
+  const [navOpen, setNavOpen] = useState(false);
+  useEffect(() => {
+    if (!navOpen) return;
+    const close = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setNavOpen(false);
+    };
+    document.addEventListener("keydown", close);
+    return () => document.removeEventListener("keydown", close);
+  }, [navOpen]);
+
   useEffect(() => {
     const expired = () => setUser(null);
     window.addEventListener("auth-expired", expired);
@@ -125,38 +142,70 @@ function App() {
   return (
     <div className="shell">
       <aside>
-        <div className="brand">
-          <ShieldCheck />
-          SafeSight
-        </div>
-        <small>SAFETY OPERATIONS / 01</small>
-        <a href="#incidents" className="nav">
-          Incident desk <ArrowUpRight size={16} />
-        </a>
-        <a href="#capture" className="nav">
-          Source control <Radio size={16} />
-        </a>
-        <a href="#testing" className="nav">
-          Video testing <Camera size={16} />
-        </a>
-        <div className="aside-bottom">
-          <small>
-            {user.username} ? {user.role}
-          </small>
+        <div className="aside-top">
+          <div className="brand">
+            <ShieldCheck />
+            SafeSight
+          </div>
           <button
-            className="ghost"
-            onClick={() =>
-              run(async () => {
-                if (capture.live) await capture.stop();
-                await api("/auth/logout", { method: "POST" });
-                setUser(null);
-                const d = await api<AuthResponse>("/auth/me");
-                setCsrf(d.csrf_token);
-              })
-            }
+            type="button"
+            className="ghost nav-toggle"
+            aria-label={navOpen ? "Close navigation" : "Open navigation"}
+            aria-expanded={navOpen}
+            aria-controls="aside-panel"
+            onClick={() => setNavOpen((open) => !open)}
           >
-            Sign out
+            {navOpen ? <X size={20} /> : <Menu size={20} />}
           </button>
+        </div>
+        <div
+          id="aside-panel"
+          className={"aside-panel" + (navOpen ? " open" : "")}
+        >
+          <small>SAFETY OPERATIONS / 01</small>
+          <nav className="nav-links" aria-label="Primary">
+            <a
+              href="#incidents"
+              className="nav"
+              onClick={() => setNavOpen(false)}
+            >
+              Incident desk <ArrowUpRight size={16} />
+            </a>
+            <a
+              href="#capture"
+              className="nav"
+              onClick={() => setNavOpen(false)}
+            >
+              Source control <Radio size={16} />
+            </a>
+            <a
+              href="#testing"
+              className="nav"
+              onClick={() => setNavOpen(false)}
+            >
+              Video testing <Camera size={16} />
+            </a>
+          </nav>
+          <div className="aside-bottom">
+            <small>
+              {user.username} ? {user.role}
+            </small>
+            <button
+              className="ghost"
+              onClick={() => {
+                setNavOpen(false);
+                run(async () => {
+                  if (capture.live) await capture.stop();
+                  await api("/auth/logout", { method: "POST" });
+                  setUser(null);
+                  const d = await api<AuthResponse>("/auth/me");
+                  setCsrf(d.csrf_token);
+                });
+              }}
+            >
+              Sign out
+            </button>
+          </div>
         </div>
       </aside>
       <main>

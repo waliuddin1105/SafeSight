@@ -29,3 +29,5 @@ Login uses invited Supabase email/password through Flask. Browser tokens/localSt
 Typed API/auth/capture/incidents/setup/testing modules replace the monolithic component. Polling rejects stale responses; dates use configured timezone, and review dialogs trap/restore focus.
 
 Dashboard modules are formatted and distinguish collection responses from paginated lists. Optional supplied-ground-truth metrics are displayed separately from detection scores.
+
+Layout is responsive from 320px up: a compact sticky header exposes navigation and sign-out on small screens, filters and health cards reflow, forms stack, and incident rows become labelled cards below 640px. Wide tables scroll inside their container instead of expanding the page.
