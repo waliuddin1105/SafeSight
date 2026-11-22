@@ -1,6 +1,7 @@
 .venv*/
 .tools/
 /Ultralytics/
+/*.pt
 __pycache__/
 *.py[cod]
 .pytest_cache/
