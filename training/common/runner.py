@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import copy
+import gc
 import hashlib
 import importlib.metadata
 import json
@@ -30,7 +31,7 @@ from safesight.ingestion.video import frames
 from safesight.model_loaders.registry import PoseExtractor, Registry, entrance_frame, select_device
 from training.common.assets import fetch
 from training.common.checkpoints import restore_state
-from training.common.datasets import jsonl, sha256, validate
+from training.common.datasets import Validation, jsonl, sha256, validate
 from training.common.evaluation import cache_predictions, calibrate, quality_gate, replay
 from training.common.fixtures import generate
 from training.common.detection_metrics import evaluate_sizes
@@ -95,7 +96,8 @@ def stage_yolo(dataset: Path, destination: Path, slug: str) -> Path:
             if not image_target.exists():
                 # Isolate third-party JPEG repair/cache behavior from user media.
                 shutil.copyfile(image, image_target)
-            shutil.copyfile(label, label_target)
+            if not label_target.exists() or label_target.read_bytes() != label.read_bytes():
+                shutil.copyfile(label, label_target)
         if slug == "cigarette_smoking" and row["split"] == "train":
             with Image.open(image) as opened:
                 w, h = opened.size
@@ -135,7 +137,15 @@ def stage_yolo(dataset: Path, destination: Path, slug: str) -> Path:
     return path
 
 
-def fit_yolo(config: dict, dataset: Path, run: Path, device: str, resume: Path | None) -> tuple[Path, Any]:
+def fit_yolo(
+    config: dict,
+    dataset: Path,
+    run: Path,
+    device: str,
+    resume: Path | None,
+    physical_batch: int | None = None,
+    reuse_staging: bool = False,
+) -> tuple[Path, Any]:
     from ultralytics import YOLO, settings
 
     settings.update(
@@ -145,9 +155,16 @@ def fit_yolo(config: dict, dataset: Path, run: Path, device: str, resume: Path |
             "runs_dir": str(run),
         }
     )
-    data = stage_yolo(dataset, run / "dataset-view", config["slug"])
+    staged = run / "dataset-view"
+    if reuse_staging:
+        data = staged / "data.yaml"
+        required = (data, staged / "labels/train.cache", staged / "labels/val.cache")
+        if not all(path.is_file() for path in required):
+            raise ValueError("Retry staging is incomplete; run without --run-dir to rebuild it")
+    else:
+        data = stage_yolo(dataset, staged, config["slug"])
     weights = fetch(config["architecture"] + ".pt", resolve_path(config["pretrained_root"]))
-    batch = config["batch"]
+    batch = physical_batch or config["batch"]
     while True:
         try:
             model = YOLO(str(resume or weights))
@@ -201,7 +218,10 @@ def fit_yolo(config: dict, dataset: Path, run: Path, device: str, resume: Path |
             last = run / "fit/weights/last.pt"
             resume = last if last.exists() else resume
             batch = max(1, batch // 2)
+            del model
+            gc.collect()
             torch.cuda.empty_cache()
+            torch.cuda.ipc_collect()
             seed_everything(config["seed"])
             LOG.warning("GPU memory limit: restarting with batch %s; resolution and effective batch unchanged", batch)
 
@@ -485,12 +505,16 @@ def main(slug: str) -> int:
     parser = argparse.ArgumentParser(description=f"Train {slug} independently")
     parser.add_argument("--config", default=f"training/{slug}/config.yaml")
     parser.add_argument("--resume", type=Path)
+    parser.add_argument("--run-dir", type=Path, help="Retry a pre-checkpoint run using its verified staging and caches")
+    parser.add_argument("--physical-batch", type=int, help="Hardware retry batch; effective batch remains configured")
     parser.add_argument("--smoke", action="store_true")
     args = parser.parse_args()
     config = read_yaml(args.config)
     if config["slug"] != slug:
         raise ValueError("Config slug differs from the entrypoint")
     config["smoke"] = args.smoke
+    if args.physical_batch is not None and (slug not in YOLO_SLUGS or args.physical_batch < 1):
+        raise ValueError("--physical-batch requires a YOLO use case and a positive value")
     if args.smoke:
         config.update(
             dataset=str(generate(slug)),
@@ -511,14 +535,33 @@ def main(slug: str) -> int:
         config["seed"],
         tuple(config.get("split_ratios", [0.7, 0.15, 0.15])),
     )
-    result = validate(dataset, slug, args.smoke, qualification=False)
-    result.write(ROOT / "artifacts/reports/validation" / slug)
+    retry_run = resolve_path(args.run_dir) if args.run_dir else None
+    if retry_run:
+        existing_run = json.loads((retry_run / "run.json").read_text(encoding="utf-8"))
+        validation_path = ROOT / "artifacts/reports/validation" / slug / "validation.json"
+        validated = json.loads(validation_path.read_text(encoding="utf-8"))
+        if not validated.get("valid") or validated.get("dataset_hash") != existing_run.get("dataset_hash"):
+            raise ValueError("Retry requires the matching successful validation report from the original run")
+        result = Validation(
+            slug=validated["slug"],
+            errors=validated["errors"],
+            warnings=validated["warnings"],
+            leakage=validated["leakage"],
+            counts=validated["counts"],
+            dataset_hash=validated["dataset_hash"],
+            synthetic=validated["synthetic"],
+        )
+    else:
+        result = validate(dataset, slug, args.smoke, qualification=False)
+        result.write(ROOT / "artifacts/reports/validation" / slug)
     if not result.valid:
         raise ValueError("Dataset invalid:\n" + "\n".join(result.errors))
     config_hash = hashlib.sha256(json.dumps(config, sort_keys=True).encode()).hexdigest()
     resume = resolve_path(args.resume) if args.resume else None
     run = (
-        resume.parent.parent
+        retry_run
+        if retry_run
+        else resume.parent.parent
         if resume and slug in YOLO_SLUGS
         else resume.parent
         if resume
@@ -528,7 +571,7 @@ def main(slug: str) -> int:
         run = run.parent
     run.mkdir(parents=True, exist_ok=True)
     metadata = {"dataset_hash": result.dataset_hash, "config_hash": config_hash, "config": config}
-    if resume:
+    if resume or args.run_dir:
         existing = json.loads((run / "run.json").read_text())
         if existing["dataset_hash"] != result.dataset_hash or existing["config_hash"] != config_hash:
             raise ValueError("Resume rejected: dataset/config/architecture changed")
@@ -536,7 +579,8 @@ def main(slug: str) -> int:
             print(f"Completed run already evaluated; reusing {run / 'report.json'}")
             return 0
     write_json(run / "run.json", metadata)
-    write_json(run / "dataset_inventory.json", dataset_inventory(dataset, slug))
+    if not (run / "dataset_inventory.json").is_file():
+        write_json(run / "dataset_inventory.json", dataset_inventory(dataset, slug))
     logging.basicConfig(
         level=logging.INFO,
         handlers=[logging.StreamHandler(), logging.FileHandler(run / "train.log", encoding="utf-8")],
@@ -544,7 +588,15 @@ def main(slug: str) -> int:
     )
     device = select_device(config["device"])
     if slug in YOLO_SLUGS:
-        artifact, model = fit_yolo(config, dataset, run, device, resume)
+        artifact, model = fit_yolo(
+            config,
+            dataset,
+            run,
+            device,
+            resume,
+            args.physical_batch,
+            reuse_staging=bool(retry_run),
+        )
         data = None
     else:
         artifact, model, data = fit_classifier(config, dataset, run, device, resume)

@@ -38,3 +38,9 @@ YOLO mixed precision is enabled only on CUDA. A hardware-specific physical batch
 larger while `nbs` preserves the effective batch. Both PyTorch OOM exceptions and CUDA
 runtime OOM messages restore the last complete checkpoint before reducing physical batch;
 resolution, epoch ceiling and quality targets are not silently reduced.
+Before the first checkpoint, a hardware retry can reuse the verified run directory and
+Ultralytics caches with `--run-dir` plus `--physical-batch`; idempotent staging preserves
+cache timestamps and the configured effective batch. The retry is accepted only when the
+run metadata matches the latest successful validation report's dataset hash.
+Verified retry runs require the existing train/validation caches and bypass restaging;
+CUDA OOM cleanup releases the failed model and inter-process cache before a lower batch retry.

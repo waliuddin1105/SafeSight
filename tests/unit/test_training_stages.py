@@ -36,6 +36,9 @@ def test_yolo_staging_preserves_duplicate_stems(tmp_path):
     (root / "manifest.jsonl").write_text("".join(json.dumps(r) + "\n" for r in rows))
     staged = tmp_path / "stage"
     stage_yolo(root, staged, "phone_usage")
+    label_times = {path: path.stat().st_mtime_ns for path in (staged / "labels").rglob("*.txt")}
+    stage_yolo(root, staged, "phone_usage")
+    assert label_times == {path: path.stat().st_mtime_ns for path in (staged / "labels").rglob("*.txt")}
     for split in ("val", "test"):
         assert len(list((staged / "images" / split).glob("*"))) == sum(r["split"] == split for r in rows)
 
