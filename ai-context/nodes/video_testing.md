@@ -20,6 +20,10 @@ uses the nearest free position above, below or beside its box. Colors are stable
 HTML overlay keeps text readable without stretching across video aspect ratios. Reloading the
 page retains job history.
 
+Normal overlays apply the model card's display floor (default 0.10). Reviewers can explicitly
+show retained low-confidence candidates down to the inference floor without changing fusion,
+temporal state, incidents, or qualification metrics.
+
 ## Inputs and outputs
 Inputs: video or image, selected versions, optional capture time and annotated event JSON;
 or a configured browser source and selected active model slugs. Uploads automatically use a

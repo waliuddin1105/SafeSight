@@ -1081,6 +1081,17 @@ label.model-option {
   border-left: 3px solid #ba9837;
   font-size: 11px;
 }
+.candidate-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 10px;
+  color: #556356;
+  font-size: 11px;
+}
+.candidate-toggle input {
+  accent-color: #45623c;
+}
 .prediction-readout {
   display: grid;
   grid-template-columns: 85px 1fr;

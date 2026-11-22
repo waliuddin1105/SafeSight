@@ -111,7 +111,15 @@ export interface Job {
     evaluation: boolean;
     media_kind?: "video" | "image";
     original_filename?: string;
-    cards: Partial<Record<Slug, { run_id: string }>>;
+    cards: Partial<
+      Record<
+        Slug,
+        {
+          run_id: string;
+          postprocessing?: { inference_floor?: number; display_floor?: number };
+        }
+      >
+    >;
   };
 }
 export interface Detection {

@@ -251,6 +251,7 @@ export function TestingWorkspace({
     [frames, setFrames] = useState<JobFrame[]>([]),
     [alerts, setAlerts] = useState<Incident[]>([]),
     [position, setPosition] = useState(0),
+    [showLowConfidence, setShowLowConfidence] = useState(false),
     [metrics, setMetrics] = useState<{
       available: boolean;
       precision?: number | null;
@@ -443,9 +444,22 @@ export function TestingWorkspace({
     observer.observe(element);
     return () => observer.disconnect();
   }, [job?.id]);
+  const visiblePredictions = useMemo(
+    () =>
+      visible?.predictions.map((prediction) => ({
+        ...prediction,
+        detections: prediction.detections.filter(
+          (detection) =>
+            showLowConfidence ||
+            detection.score >=
+              (job?.snapshot.cards[prediction.slug]?.postprocessing?.display_floor ?? 0.1),
+        ),
+      })),
+    [visible, job, showLowConfidence],
+  );
   const overlayDetections = useMemo(
-    () => layoutDetectionOverlay(visible?.predictions, stageSize.width, stageSize.height),
-    [visible, stageSize],
+    () => layoutDetectionOverlay(visiblePredictions, stageSize.width, stageSize.height),
+    [visiblePredictions, stageSize],
   );
 
   return (
@@ -847,6 +861,14 @@ export function TestingWorkspace({
                   production-qualified.
                 </p>
               )}
+              <label className="candidate-toggle">
+                <input
+                  type="checkbox"
+                  checked={showLowConfidence}
+                  onChange={(event) => setShowLowConfidence(event.target.checked)}
+                />
+                Show retained low-confidence candidates
+              </label>
               <div ref={stage} className="video-stage" style={{ aspectRatio: ratio }}>
                 <video
                   key={job.id}
@@ -876,8 +898,8 @@ export function TestingWorkspace({
               </div>
               <div className="prediction-readout">
                 <small>{position.toFixed(1)} SECONDS</small>
-                {visible?.predictions.length ? (
-                  visible.predictions.map((prediction) => (
+                {visiblePredictions?.length ? (
+                  visiblePredictions.map((prediction) => (
                     <p key={prediction.slug}>
                       <b>{labels[prediction.slug]}</b>
                       {prediction.unknown_reason ||
@@ -887,7 +909,7 @@ export function TestingWorkspace({
                               `${detection.label} ${(detection.score * 100).toFixed(0)}%`,
                           )
                           .join(", ") ||
-                        "No detections"}
+                        (showLowConfidence ? "No retained detections" : "No detections above display floor")}
                     </p>
                   ))
                 ) : (
