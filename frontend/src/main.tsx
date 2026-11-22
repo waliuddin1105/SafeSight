@@ -102,7 +102,7 @@ function App() {
     setTotal(i.total);
   }, [page, filters, zone]);
   useEffect(() => {
-    if (!user) return;
+    if (!user || view !== "overview") return;
     let active = true,
       pending = false;
     const poll = async () => {
@@ -123,7 +123,7 @@ function App() {
       generation.current++;
       clearInterval(timer);
     };
-  }, [user, refresh]);
+  }, [user, refresh, view]);
   async function run(action: () => Promise<void>) {
     setError("");
     try {

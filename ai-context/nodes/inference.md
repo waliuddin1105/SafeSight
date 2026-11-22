@@ -27,3 +27,15 @@ Registry can load explicit pinned cards and reuse compatible global adapters/pos
 The worker does not execute shared pose context for fire/smoke-only jobs. Pose is evaluated
 only when a selected, ready model consumes people/keypoints; smoking/fire fusion therefore
 retains pose while standalone fire and smoke detection avoids the CPU-only pose pass.
+The pose landmarker is initialized only when a selected or active model needs it.
+Model-card parsing lives in a lightweight contract so API requests do not import
+inference libraries. Large artifacts are hashed in chunks. Tracking ambiguity
+clears person-associated temporal state while preserving scene-level fire state.
+Entrance sequence classification runs at a one-second stride to avoid repeatedly
+processing the growing window on every sampled frame.
+Incompatible model-card global policies do not prevent unrelated models from loading;
+the configured shared policy remains active and qualified fusion still requires an
+exact policy match.
+YOLO adapters accept ordered frame batches. Smoking performs one full-frame batch
+and one person-crop batch, then maps crop boxes to their original frames. Temporal
+decisions still consume predictions in timestamp order.

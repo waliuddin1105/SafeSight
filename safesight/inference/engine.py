@@ -178,9 +178,14 @@ class Engine:
                         people.append(detection)
         people, ambiguous = self.tracker.update(people, timestamp)
         if ambiguous:
-            self.temporal.states.clear()
+            self.temporal.states = {
+                key: state for key, state in self.temporal.states.items() if key[2] == "scene"
+            }
             self.cues.clear()
-            self.unknown["entrance_guard"] = "Ambiguous track reassignment"
+            self.previous_y.clear()
+            self.pending_crossings.clear()
+            if "entrance_guard" in by_slug:
+                self.unknown["entrance_guard"] = "Ambiguous track reassignment"
         result: list[Candidate] = []
 
         def add(

@@ -53,7 +53,7 @@ def ready():
             seconds=cfg["worker_lease_seconds"]
         )
         states = worker.value.get("models", {}) if worker else {}
-        healthy = bool(fresh) and all(states.get(slug, {}).get("ready") for slug in SLUGS)
+        healthy = bool(fresh) and any(states.get(slug, {}).get("ready") for slug in SLUGS)
         return jsonify(
             status="ready" if healthy else "degraded", database=True, worker=bool(fresh), models=states
         ), 200 if healthy else 503
@@ -62,7 +62,7 @@ def ready():
 @bp.get("/api/v1/models/versions")
 @authenticated
 def model_versions():
-    from safesight.model_loaders.registry import ModelCard
+    from safesight.contracts.model_card import ModelCard
     from safesight.config import within
 
     items = []

@@ -7,17 +7,25 @@ import copy
 import logging
 from collections import deque
 from pathlib import Path
-from typing import Any, Protocol
+from typing import Protocol
 
 import cv2
 import numpy as np
 import torch
-from pydantic import BaseModel, ConfigDict, Field
-
 from safesight.config import within
 from safesight.contracts import CLASSES, Detection, Prediction
+from safesight.contracts.model_card import ModelCard
 
 LOG = logging.getLogger(__name__)
+
+
+def file_sha256(path: Path) -> str:
+    """Hash large model files without loading them into API or worker memory."""
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def select_device(requested: str = "auto") -> str:
@@ -33,28 +41,6 @@ def select_device(requested: str = "auto") -> str:
         LOG.warning("CUDA probe failed, using CPU: %s", error)
     LOG.info("Using CPU; a working CUDA installation is optional")
     return "cpu"
-
-
-class ModelCard(BaseModel):
-    """Persisted interface between independently trained models and the pipeline."""
-
-    model_config = ConfigDict(extra="allow")
-    schema_version: int = 1
-    slug: str
-    loader: str
-    architecture: str
-    classes: list[str]
-    artifact: str
-    sha256: str
-    run_id: str
-    input_size: int
-    thresholds: dict[str, float]
-    quality: dict[str, Any]
-    synthetic: bool = False
-    sequence_length: int = 100
-    sequence_fps: float = 5
-    preprocessing: str = "v1"
-    metrics: dict[str, Any] = Field(default_factory=dict)
 
 
 class Adapter(Protocol):
@@ -135,7 +121,7 @@ class PoseExtractor:
 
         if not asset.is_file():
             raise FileNotFoundError(f"Pose asset missing: {asset}; use tools/fetch_pretrained.py")
-        self.asset_hash = hashlib.sha256(asset.read_bytes()).hexdigest()
+        self.asset_hash = file_sha256(asset)
         self.mp = mp
         self.model = mp.tasks.vision.PoseLandmarker.create_from_options(
             mp.tasks.vision.PoseLandmarkerOptions(
@@ -180,45 +166,52 @@ class YoloAdapter:
             raise ValueError("Weights and model-card classes differ")
 
     def predict(self, rgb: np.ndarray, timestamp: float) -> Prediction:
-        result = self.model.predict(
-            rgb[:, :, ::-1],
+        return self.predict_batch([rgb], [timestamp])[0]
+
+    def predict_batch(self, images: list[np.ndarray], timestamps: list[float]) -> list[Prediction]:
+        """Batch detector work while preserving input order and per-frame coordinates."""
+        if len(images) != len(timestamps) or not images:
+            raise ValueError("Images and timestamps must be nonempty and aligned")
+        results = self.model.predict(
+            [rgb[:, :, ::-1] for rgb in images],
             imgsz=self.card.input_size,
             device=self.device,
             conf=0.01,
             iou=self.nms_iou,
             agnostic_nms=False,
             verbose=False,
-        )[0]
-        detections = [
-            Detection(self.card.classes[int(c)], float(s), tuple(map(float, b)))
-            for b, s, c in zip(
-                result.boxes.xyxyn.cpu().tolist(), result.boxes.conf.cpu().tolist(), result.boxes.cls.cpu().tolist()
-            )
+        )
+        detections_by_frame = [
+            [Detection(self.card.classes[int(c)], float(s), tuple(map(float, b)))
+             for b, s, c in zip(result.boxes.xyxyn.cpu().tolist(), result.boxes.conf.cpu().tolist(), result.boxes.cls.cpu().tolist())]
+            for result in results
         ]
         if self.card.slug == "cigarette_smoking":
-            height, width = rgb.shape[:2]
-            for person in list(detections):
-                if person.label != "person" or person.score < 0.25:
-                    continue
-                x1, y1, x2, y2 = person.box
-                padding = 0.2
-                left, top = (
-                    max(0, int((x1 - padding * (x2 - x1)) * width)),
-                    max(0, int((y1 - padding * (y2 - y1)) * height)),
+            crop_images, crop_origins = [], []
+            for frame_index, (rgb, detections) in enumerate(zip(images, detections_by_frame)):
+                height, width = rgb.shape[:2]
+                for person in detections:
+                    if person.label != "person" or person.score < 0.25:
+                        continue
+                    x1, y1, x2, y2 = person.box
+                    padding = 0.2
+                    left = max(0, int((x1 - padding * (x2 - x1)) * width))
+                    top = max(0, int((y1 - padding * (y2 - y1)) * height))
+                    right = min(width, int((x2 + padding * (x2 - x1)) * width))
+                    bottom = min(height, int((y2 + padding * (y2 - y1)) * height))
+                    if right - left < 16 or bottom - top < 16:
+                        continue
+                    crop_images.append(rgb[top:bottom, left:right, ::-1])
+                    crop_origins.append((frame_index, left, top, right, bottom, width, height))
+            if crop_images:
+                crop_results = self.model.predict(
+                    crop_images, imgsz=self.card.input_size, device=self.device,
+                    conf=0.01, verbose=False,
                 )
-                right, bottom = (
-                    min(width, int((x2 + padding * (x2 - x1)) * width)),
-                    min(height, int((y2 + padding * (y2 - y1)) * height)),
-                )
-                if right - left < 16 or bottom - top < 16:
-                    continue
-                crop = self.model.predict(
-                    rgb[top:bottom, left:right, ::-1],
-                    imgsz=self.card.input_size,
-                    device=self.device,
-                    conf=0.01,
-                    verbose=False,
-                )[0]
+            else:
+                crop_results = []
+            for crop, (frame_index, left, top, right, bottom, width, height) in zip(crop_results, crop_origins):
+                detections = detections_by_frame[frame_index]
                 for box, score, class_id in zip(
                     crop.boxes.xyxyn.cpu().tolist(), crop.boxes.conf.cpu().tolist(), crop.boxes.cls.cpu().tolist()
                 ):
@@ -235,12 +228,12 @@ class YoloAdapter:
 
                     if not any(d.label == label and iou(d.box, mapped) > 0.5 and d.score >= score for d in detections):
                         detections.append(Detection(label, float(score), mapped))
-        detections = deduplicate_detections(
-            detections,
-            iou_threshold=self.nms_iou,
-            containment_threshold=self.containment_threshold,
-        )
-        return Prediction(self.card.slug, timestamp, detections=detections, model_version=self.card.run_id)
+        return [
+            Prediction(self.card.slug, timestamp,
+                detections=deduplicate_detections(detections, self.nms_iou, self.containment_threshold),
+                model_version=self.card.run_id)
+            for timestamp, detections in zip(timestamps, detections_by_frame)
+        ]
 
 
 class TorchAdapter:
@@ -248,13 +241,15 @@ class TorchAdapter:
         self.card, self.device, self.pose = card, device, pose
         self.model = torch.jit.load(str(artifact), map_location=device).eval()
         self.buffer: deque[tuple[float, np.ndarray]] = deque(maxlen=card.sequence_length)
+        self.frames_seen = 0
         self.source_config: dict = {}
 
-    def predict(self, rgb: np.ndarray, timestamp: float) -> Prediction:
+    def predict(self, rgb: np.ndarray, timestamp: float, people: list[Detection] | None = None) -> Prediction:
         if self.card.slug == "body_state":
             if self.pose is None:
                 return Prediction(self.card.slug, timestamp, unknown_reason="Pose extractor unavailable")
-            people = self.pose.extract(rgb)
+            if people is None:
+                people = self.pose.extract(rgb)
             if not people:
                 return Prediction(self.card.slug, timestamp, unknown_reason="No visible pose")
             tensor = torch.tensor([p.keypoints for p in people], dtype=torch.float32, device=self.device)
@@ -269,11 +264,17 @@ class TorchAdapter:
             return Prediction(self.card.slug, timestamp, detections=detections, model_version=self.card.run_id)
         if self.buffer and (timestamp <= self.buffer[-1][0] or timestamp - self.buffer[-1][0] > 1):
             self.buffer.clear()
+            self.frames_seen = 0
         if not self.buffer or timestamp - self.buffer[-1][0] >= 1 / self.card.sequence_fps - 0.01:
             self.buffer.append(
                 (timestamp, entrance_frame(rgb, self.card.input_size, self.source_config.get("entrance_roi")))
             )
+            self.frames_seen += 1
         if len(self.buffer) < min(self.card.sequence_length, int(self.card.sequence_fps * 2)):
+            return Prediction(self.card.slug, timestamp, unknown_reason="Collecting entrance observation window")
+        # The window is expensive; evaluate once per second while retaining every frame.
+        stride = max(1, round(self.card.sequence_fps))
+        if self.frames_seen % stride:
             return Prediction(self.card.slug, timestamp, unknown_reason="Collecting entrance observation window")
         array = np.stack([frame for _, frame in self.buffer]).transpose(0, 3, 1, 2).astype(np.float32) / 255
         with torch.inference_mode():
@@ -310,8 +311,11 @@ class Registry:
         self.pose: PoseExtractor | None = None
         pose_path = within(self.root, pose_asset)
         self.owns_pose = True
-        if pose_path.exists():
-            pose_hash = hashlib.sha256(pose_path.read_bytes()).hexdigest()
+        selected_slugs = set(selected) if selected is not None else {
+            slug for slug in CLASSES if (self.root / slug / "model_card.json").is_file()
+        }
+        if pose_path.exists() and selected_slugs.intersection({"body_state", "phone_usage", "cigarette_smoking", "entrance_guard"}):
+            pose_hash = file_sha256(pose_path)
             if (
                 reusable is not None
                 and reusable.pose is not None
@@ -357,7 +361,7 @@ class Registry:
                     raise ValueError("Incompatible model card schema/classes/preprocessing")
                 expected_context = (card.model_extra or {}).get("context_asset_sha256")
                 if expected_context is not None and (
-                    not pose_path.is_file() or hashlib.sha256(pose_path.read_bytes()).hexdigest() != expected_context
+                    not pose_path.is_file() or file_sha256(pose_path) != expected_context
                 ):
                     raise ValueError("Preprocessing pose asset differs from the calibrated model context")
                 if slug in ("body_state", "phone_usage", "cigarette_smoking", "entrance_guard") and self.pose is None:
@@ -367,7 +371,7 @@ class Registry:
                 artifact = within(self.root, card.artifact)
                 if not artifact.is_file():
                     raise ValueError("Model artifact referenced by the card is not installed on this device")
-                if hashlib.sha256(artifact.read_bytes()).hexdigest() != card.sha256:
+                if file_sha256(artifact) != card.sha256:
                     raise ValueError("Model artifact checksum mismatch")
                 existing = (
                     reusable.adapters.get(slug) if reusable is not None and reusable.device == self.device else None
@@ -405,9 +409,10 @@ class Registry:
                 result[slug] = copy.deepcopy(policy[slug])
                 global_policies.append({k: v for k, v in policy.items() if k not in CLASSES})
         if global_policies:
-            if any(p != global_policies[0] for p in global_policies):
-                raise ValueError("Models were calibrated with incompatible global temporal policies")
-            result.update(global_policies[0])
+            if all(p == global_policies[0] for p in global_policies):
+                result.update(global_policies[0])
+            else:
+                LOG.warning("Model global temporal policies differ; retaining configured shared policy")
         from safesight.contracts.configuration import validate_policy
 
         return validate_policy(result)

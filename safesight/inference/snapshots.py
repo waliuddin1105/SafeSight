@@ -5,7 +5,7 @@ import json
 
 from safesight.config import read_yaml, within
 from safesight.contracts import SLUGS
-from safesight.model_loaders.registry import ModelCard
+from safesight.contracts.model_card import ModelCard
 
 
 def snapshot_models(config: dict, selected: list[str], evaluation: bool, versions: dict | None = None) -> dict:
