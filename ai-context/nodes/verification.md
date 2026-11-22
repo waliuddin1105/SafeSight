@@ -21,10 +21,14 @@ Input: unit/integration/browser acceptance tests and tools/check_release.py. Out
 
 Do not confuse historical synthetic training reports with verification of the updated trainers. No real data accuracy or GPU/Docker claim is established here.
 
-Current result: 88 Python checks pass and one PostgreSQL advisory-lock loss test is
+Current result: 91 Python checks pass and one PostgreSQL advisory-lock loss test is
 skipped by the SQLite test backend. TypeScript build, Ruff, OpenAPI/context freshness
 and source/release contracts pass. No train.py entrypoint was executed. Docker runtime
 remains unverified locally.
+
+The pre-training foundation verifies schema-v2 card/qualification/deployment hash binding,
+legacy compatibility, isolated synthetic fixtures, detector floors, and all entrance outcome
+branches. Qualification was not executed and no real quality result is claimed.
 
 Supabase identity/session tests use an explicit fake HTTP boundary against disposable PostgreSQL, not a production auth bypass. Remote connectivity and schema migration are checked separately; no real user password login is claimed.
 

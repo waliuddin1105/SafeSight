@@ -183,3 +183,12 @@ camera decoding, evidence workloads, real scenes, alert quality or accuracy. Fiv
 (233.7-507.7 ms), supporting the decision to consolidate polling and chunk writes.
 One PostgreSQL advisory-lock connection-loss test is skipped when the disposable test
 database uses SQLite; the production-only ownership path remains covered on PostgreSQL.
+
+## Pre-training model contract foundation (2026-11-22)
+
+The consolidated non-training pass reports 91 Python tests passed and one PostgreSQL-only
+advisory-lock test skipped under SQLite. Ruff, TypeScript/Vite production build, OpenAPI,
+context graph, and release contracts pass. Focused checks cover immutable schema-v2 model
+cards, qualification/deployment hash binding, v1 compatibility, isolated inference fixtures,
+detector inference/display floors, pinned image/video jobs, and verified versus unverified
+entrance crossings. No trainer, optimizer, qualification dataset, or accuracy evaluation ran.
