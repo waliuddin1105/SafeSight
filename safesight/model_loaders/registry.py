@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import copy
+import gc
 import logging
 from collections import deque
 from pathlib import Path
@@ -292,7 +293,7 @@ class TorchAdapter:
 
 
 class Registry:
-    """Load configured task artifacts and preserve explicit per-task failure status."""
+    """Validate model artifacts eagerly and construct only selected runtime adapters."""
 
     def __init__(
         self,
@@ -303,27 +304,20 @@ class Registry:
         pose_asset: str = "_pretrained/pose_landmarker_lite.task",
         cards: dict | None = None,
         reusable: Registry | None = None,
+        lazy: bool = False,
     ):
         self.root, self.evaluation = root.resolve(), evaluation
-        self.device = select_device(device)
+        self.requested_device = device
+        self.device: str | None = None
+        self.lazy = lazy
         self.adapters: dict[str, Adapter] = {}
+        self.cards: dict[str, ModelCard] = {}
+        self.artifacts: dict[str, Path] = {}
         self.status: dict[str, dict] = {}
         self.pose: PoseExtractor | None = None
-        pose_path = within(self.root, pose_asset)
+        self.pose_path = within(self.root, pose_asset)
         self.owns_pose = True
-        selected_slugs = set(selected) if selected is not None else {
-            slug for slug in CLASSES if (self.root / slug / "model_card.json").is_file()
-        }
-        if pose_path.exists() and selected_slugs.intersection({"body_state", "phone_usage", "cigarette_smoking", "entrance_guard"}):
-            pose_hash = file_sha256(pose_path)
-            if (
-                reusable is not None
-                and reusable.pose is not None
-                and getattr(reusable.pose, "asset_hash", None) == pose_hash
-            ):
-                self.pose, self.owns_pose = reusable.pose, False
-            else:
-                self.pose = PoseExtractor(pose_path)
+        self.reusable = reusable
         for slug in selected if selected is not None else CLASSES:
             relative_card = (selected or {}).get(slug, f"{slug}/model_card.json")
             card_path = within(self.root, relative_card)
@@ -361,10 +355,10 @@ class Registry:
                     raise ValueError("Incompatible model card schema/classes/preprocessing")
                 expected_context = (card.model_extra or {}).get("context_asset_sha256")
                 if expected_context is not None and (
-                    not pose_path.is_file() or file_sha256(pose_path) != expected_context
+                    not self.pose_path.is_file() or file_sha256(self.pose_path) != expected_context
                 ):
                     raise ValueError("Preprocessing pose asset differs from the calibrated model context")
-                if slug in ("body_state", "phone_usage", "cigarette_smoking", "entrance_guard") and self.pose is None:
+                if slug in ("body_state", "phone_usage", "cigarette_smoking", "entrance_guard") and not self.pose_path.is_file():
                     raise ValueError("Required pretrained pose context asset is missing")
                 if (card.synthetic or card.quality.get("status") != "PASS") and not evaluation:
                     raise ValueError("Model failed production gate; explicit evaluation mode required")
@@ -373,20 +367,12 @@ class Registry:
                     raise ValueError("Model artifact referenced by the card is not installed on this device")
                 if file_sha256(artifact) != card.sha256:
                     raise ValueError("Model artifact checksum mismatch")
-                existing = (
-                    reusable.adapters.get(slug) if reusable is not None and reusable.device == self.device else None
-                )
-                if existing is not None and existing.card.model_dump() == card.model_dump():
-                    adapter = existing
-                elif card.loader == "ultralytics":
-                    adapter = YoloAdapter(card, artifact, self.device)
-                elif card.loader == "torchscript":
-                    adapter = TorchAdapter(card, artifact, self.device, self.pose)
-                else:
+                if card.loader not in ("ultralytics", "torchscript"):
                     raise ValueError(f"Unsupported loader: {card.loader}")
-                self.adapters[slug] = adapter
+                self.cards[slug], self.artifacts[slug] = card, artifact
                 self.status[slug] = {
                     "ready": True,
+                    "loaded": False,
                     "run_id": card.run_id,
                     "quality": card.quality,
                     "synthetic": card.synthetic,
@@ -394,17 +380,79 @@ class Registry:
                 }
             except (OSError, ValueError, RuntimeError, KeyError) as error:
                 self.status[slug] = {"ready": False, "reason": str(error)}
+        if not lazy:
+            self.activate(set(self.cards), unload=False)
+
+    def _ensure_pose(self, selected: set[str]) -> None:
+        needs_pose = bool(selected.intersection({"body_state", "phone_usage", "cigarette_smoking", "entrance_guard"}))
+        if not needs_pose or self.pose is not None:
+            return
+        pose_hash = file_sha256(self.pose_path)
+        if (
+            self.reusable is not None
+            and self.reusable.pose is not None
+            and getattr(self.reusable.pose, "asset_hash", None) == pose_hash
+        ):
+            self.pose, self.owns_pose = self.reusable.pose, False
+        else:
+            self.pose, self.owns_pose = PoseExtractor(self.pose_path), True
+
+    def activate(self, selected: set[str], unload: bool = True) -> None:
+        """Make exactly the selected validated adapters available for inference."""
+        selected = set(selected).intersection(self.cards)
+        if self.device is None and selected:
+            self.device = select_device(self.requested_device)
+        if unload:
+            for slug in set(self.adapters) - selected:
+                del self.adapters[slug]
+                if slug in self.status:
+                    self.status[slug]["loaded"] = False
+            if self.pose is not None and not selected.intersection(
+                {"body_state", "phone_usage", "cigarette_smoking", "entrance_guard"}
+            ):
+                if self.owns_pose:
+                    self.pose.close()
+                self.pose = None
+                self.owns_pose = True
+        self._ensure_pose(selected)
+        for slug in selected - set(self.adapters):
+            card, artifact = self.cards[slug], self.artifacts[slug]
+            try:
+                existing = (
+                    self.reusable.adapters.get(slug)
+                    if self.reusable is not None and self.reusable.device == self.device
+                    else None
+                )
+                if existing is not None and existing.card.model_dump() == card.model_dump():
+                    adapter = existing
+                elif card.loader == "ultralytics":
+                    adapter = YoloAdapter(card, artifact, self.device or "cpu")
+                else:
+                    adapter = TorchAdapter(card, artifact, self.device or "cpu", self.pose)
+                self.adapters[slug] = adapter
+                self.status[slug]["loaded"] = True
+            except (OSError, ValueError, RuntimeError, KeyError) as error:
+                self.status[slug] = {"ready": False, "loaded": False, "reason": str(error)}
+        if unload:
+            gc.collect()
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
 
     def close(self) -> None:
         if self.pose and self.owns_pose:
             self.pose.close()
+        self.pose = None
+        self.adapters.clear()
+        gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
 
     def temporal_policy(self, fallback: dict) -> dict:
         """Use each artifact's calibrated behavior, rejecting incompatible fusion policies."""
         result = copy.deepcopy(fallback)
         global_policies = []
-        for slug, adapter in self.adapters.items():
-            policy = adapter.card.model_extra.get("temporal_policy", {}) if adapter.card.model_extra else {}
+        for slug, card in self.cards.items():
+            policy = card.model_extra.get("temporal_policy", {}) if card.model_extra else {}
             if policy:
                 result[slug] = copy.deepcopy(policy[slug])
                 global_policies.append({k: v for k, v in policy.items() if k not in CLASSES})

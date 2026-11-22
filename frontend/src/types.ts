@@ -64,6 +64,7 @@ export interface Incident {
 }
 export interface ModelStatus {
   ready: boolean;
+  loaded?: boolean;
   evaluation_only?: boolean;
   reason?: string;
   available_versions?: string[];

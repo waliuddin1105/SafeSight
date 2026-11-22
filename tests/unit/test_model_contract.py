@@ -166,3 +166,64 @@ def test_smoking_batch_maps_crop_boxes_to_each_original_frame():
     assert adapter.model.calls == [2, 2]
     assert [prediction.timestamp for prediction in predictions] == [0.0, 0.2]
     assert all(any(d.label == "cigarette" and d.box[0] > 0.2 for d in p.detections) for p in predictions)
+
+
+def test_lazy_registry_loads_only_selected_model_and_pose(tmp_path, monkeypatch):
+    root = tmp_path / "models"
+    (root / "_pretrained").mkdir(parents=True)
+    (root / "_pretrained/pose_landmarker_lite.task").write_bytes(b"pose")
+    for slug, loader in (("fire_smoke", "ultralytics"), ("body_state", "torchscript")):
+        folder = root / slug
+        folder.mkdir()
+        artifact = folder / "fixture.bin"
+        artifact.write_bytes(slug.encode())
+        (folder / "model_card.json").write_text(
+            json.dumps(
+                {
+                    "slug": slug,
+                    "loader": loader,
+                    "architecture": "fixture",
+                    "classes": CLASSES[slug],
+                    "artifact": f"{slug}/fixture.bin",
+                    "sha256": hashlib.sha256(artifact.read_bytes()).hexdigest(),
+                    "run_id": "fixture",
+                    "input_size": 64,
+                    "thresholds": {},
+                    "quality": {"status": "FAIL"},
+                    "synthetic": True,
+                }
+            )
+        )
+    loaded, pose_events = [], []
+
+    class Adapter:
+        def __init__(self, card, artifact, device, pose=None):
+            self.card = card
+            loaded.append((card.slug, device, pose is not None))
+
+    class Pose:
+        asset_hash = "fixture"
+
+        def __init__(self, _asset):
+            pose_events.append("opened")
+
+        def close(self):
+            pose_events.append("closed")
+
+    monkeypatch.setattr("safesight.model_loaders.registry.YoloAdapter", Adapter)
+    monkeypatch.setattr("safesight.model_loaders.registry.TorchAdapter", Adapter)
+    monkeypatch.setattr("safesight.model_loaders.registry.PoseExtractor", Pose)
+    registry = Registry(root, evaluation=True, device="cpu", lazy=True)
+    try:
+        assert registry.device is None and not registry.adapters and registry.pose is None
+        assert registry.status["fire_smoke"]["ready"] and not registry.status["fire_smoke"]["loaded"]
+        registry.activate({"fire_smoke"})
+        assert set(registry.adapters) == {"fire_smoke"}
+        assert pose_events == []
+        registry.activate({"body_state"})
+        assert set(registry.adapters) == {"body_state"}
+        assert loaded == [("fire_smoke", "cpu", False), ("body_state", "cpu", True)]
+        assert pose_events == ["opened"]
+    finally:
+        registry.close()
+    assert pose_events == ["opened", "closed"]

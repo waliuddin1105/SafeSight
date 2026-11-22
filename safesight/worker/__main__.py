@@ -70,15 +70,16 @@ class Worker:
             self.config["models_root"],
             self.config["evaluation_mode"],
             pose_asset=read_yaml(self.config["inference_config"])["pose_asset"],
+            lazy=True,
         )
         self.policy = self.registry.temporal_policy(read_yaml(self.config["inference_config"]))
-        self.thresholds = {s: dict(a.card.thresholds) for s, a in self.registry.adapters.items()}
+        self.thresholds = {s: dict(card.thresholds) for s, card in self.registry.cards.items()}
         self.fusion_enabled = False
         fusion_path = self.registry.root / "fusion_card.json"
         if fusion_path.exists():
             fusion = json.loads(fusion_path.read_text())
             matching = set(fusion.get("models", {})) == {"cigarette_smoking", "fire_smoke"} and all(
-                s in self.registry.adapters
+                s in self.registry.cards
                 and (self.registry.root / s / "model_card.json").exists()
                 and hashlib.sha256((self.registry.root / s / "model_card.json").read_bytes()).hexdigest() == digest
                 for s, digest in fusion.get("models", {}).items()
@@ -96,7 +97,7 @@ class Worker:
                     "policy": self.policy,
                     "thresholds": self.thresholds,
                     "fusion": self.fusion_enabled,
-                    "models": {s: a.card.model_dump() for s, a in self.registry.adapters.items()},
+                    "models": {s: card.model_dump() for s, card in self.registry.cards.items()},
                 },
                 sort_keys=True,
             ).encode()
@@ -148,8 +149,7 @@ class Worker:
                         "failed",
                         "Recovery snapshot unavailable or incompatible with selected model artifacts",
                     )
-            for slug, adapter in self.registry.adapters.items():
-                card = adapter.card
+            for slug, card in self.registry.cards.items():
                 row = db.scalar(
                     select(ModelVersion).where(ModelVersion.slug == slug, ModelVersion.run_id == card.run_id)
                 )
@@ -228,6 +228,7 @@ class Worker:
         self, source: Source, rgb: np.ndarray, timestamp: float, captured_at=None, session_key: str = "",
         *, db=None, prepared: dict | None = None, packet_id: str | None = None,
     ) -> None:
+        self.registry.activate(set(source.enabled_models))
         key = f"{source.id}:{source.generation}:{session_key}"
         if key not in self.engines:
             config = dict(self.policy)

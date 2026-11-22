@@ -36,6 +36,13 @@ processing the growing window on every sampled frame.
 Incompatible model-card global policies do not prevent unrelated models from loading;
 the configured shared policy remains active and qualified fusion still requires an
 exact policy match.
+
+Worker startup validates cards, classes, artifact hashes, quality gates and context
+assets without constructing runtime adapters. Model status distinguishes `ready`
+from `loaded`. A live source activates only its selected adapters and initializes
+MediaPipe only when those models require pose. Pinned uploads continue loading only
+their immutable selected versions. Unused live adapters are released before a new
+selection is activated.
 YOLO adapters accept ordered frame batches. Smoking performs one full-frame batch
 and one person-crop batch, then maps crop boxes to their original frames. Temporal
 decisions still consume predictions in timestamp order.
