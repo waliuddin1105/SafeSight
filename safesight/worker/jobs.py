@@ -241,5 +241,5 @@ def process_job(worker) -> bool:
         current.state, current.error = state, error
         current.processing_seconds += time.perf_counter() - started
     worker.video_jobs.pop(job.id, None)
-    worker.release_finished_sessions()
+    worker.release_finished_sessions(force=True)
     return True

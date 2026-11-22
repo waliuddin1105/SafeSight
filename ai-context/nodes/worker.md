@@ -41,3 +41,10 @@ are evaluated before a single transaction commits the ordered frame results, job
 cursor, incident changes and recovery snapshot. A failed commit restores the last
 committed snapshot. A single evidence thread encodes clips; pending evidence retains
 its snapshot until completion and remains recoverable after restart.
+
+Session cleanup runs at most every five seconds and resolves all tracked sources and
+jobs with set-based queries. Terminal job/source transitions request immediate cleanup,
+while pending evidence continues to retain recovery state. Recovery-blob collection
+and expired auth cleanup run at five-minute intervals only when no upload work is
+available. Ownership is checked immediately before each mutation rather than on every
+idle loop iteration.

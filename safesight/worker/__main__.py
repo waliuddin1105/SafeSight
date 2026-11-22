@@ -15,7 +15,7 @@ import time
 import cv2
 import numpy as np
 from PIL import Image
-from sqlalchemy import select, text
+from sqlalchemy import delete, select, text
 
 from safesight.config import read_yaml, settings, within
 from safesight.inference.engine import Engine
@@ -104,6 +104,7 @@ class Worker:
         ).hexdigest()
         self.media = self.config["media_root"]
         self.last_recovery_gc = 0.0
+        self.last_session_cleanup = 0.0
         self.last_heartbeat = 0.0
         self.engines, self.buffers, self.captures, self.pending = {}, {}, {}, {}
         self.evidence_pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="safesight-evidence")
@@ -216,6 +217,7 @@ class Worker:
         self.last_recovery_gc = time.monotonic()
 
     def heartbeat(self) -> None:
+        self.assert_owner()
         with self.sessions.begin() as db:
             row = db.get(SystemState, "worker")
             if row is None:
@@ -414,6 +416,7 @@ class Worker:
             except Exception as error:
                 LOG.exception("Evidence encoding failed")
                 failure = str(error)
+            self.assert_owner()
             with self.sessions.begin() as db:
                 row = db.get(Evidence, evidence_id)
                 if row:
@@ -435,16 +438,8 @@ class Worker:
 
     def tick(self) -> bool:
         """Claim briefly, decode/infer outside the transaction, then commit progress."""
-        self.assert_owner()
         self.finish_clips()
         self.release_finished_sessions()
-        if time.monotonic() - self.last_recovery_gc > 30:
-            self.collect_recovery_blobs()
-            with self.sessions.begin() as db:
-                from sqlalchemy import delete
-
-                db.execute(delete(AuthSession).where(AuthSession.expires_at < utcnow()))
-                db.execute(delete(LoginAttempt).where(LoginAttempt.expires_at < utcnow()))
         if time.monotonic() - self.last_heartbeat >= 5:
             self.heartbeat()
             self.last_heartbeat = time.monotonic()
@@ -507,38 +502,70 @@ class Worker:
         capture = self.captures.pop(source_id, None)
         if capture:
             capture.release()
+        self.assert_owner()
         with self.sessions.begin() as db:
             source = db.get(Source, source_id)
             if source:
                 source.active = False
                 source.health = {**source.health, "status": reason}
+        self.release_finished_sessions(force=True)
 
     def tick_job(self) -> bool:
         from safesight.worker.jobs import process_job
 
-        return process_job(self)
+        worked = process_job(self)
+        if not worked:
+            self.maintenance()
+        return worked
 
-    def release_finished_sessions(self) -> None:
-        """Finalize stopped sessions and keep memory/snapshots bounded across jobs."""
-        for key in list(self.engines):
-            source_id, generation, job_id = key.split(":", 2)
-            with self.sessions() as db:
-                source = db.get(Source, source_id)
-                job = db.get(Job, job_id) if job_id else None
-                finished = (
-                    (job is None or job.state in ("completed", "failed", "cancelled"))
-                    if job_id
-                    else (source is None or not source.active or source.generation != int(generation))
-                )
+    def maintenance(self) -> None:
+        """Run filesystem/database housekeeping only while inference is idle."""
+        if time.monotonic() - self.last_recovery_gc < 300:
+            return
+        self.assert_owner()
+        self.collect_recovery_blobs()
+        with self.sessions.begin() as db:
+            db.execute(delete(AuthSession).where(AuthSession.expires_at < utcnow()))
+            db.execute(delete(LoginAttempt).where(LoginAttempt.expires_at < utcnow()))
+
+    def release_finished_sessions(self, force: bool = False) -> None:
+        """Finalize stopped sessions using bounded set-based state queries."""
+        now = time.monotonic()
+        if not force and now - self.last_session_cleanup < 5:
+            return
+        self.last_session_cleanup = now
+        parsed = {key: key.split(":", 2) for key in self.engines}
+        if not parsed:
+            return
+        source_ids = {parts[0] for parts in parsed.values()}
+        job_ids = {parts[2] for parts in parsed.values() if parts[2]}
+        with self.sessions() as db:
+            sources = {
+                row.id: row for row in db.scalars(select(Source).where(Source.id.in_(source_ids)))
+            }
+            jobs = {
+                row.id: row for row in db.scalars(select(Job).where(Job.id.in_(job_ids)))
+            } if job_ids else {}
+        releasable = []
+        for key, (source_id, generation, job_id) in parsed.items():
+            source, job = sources.get(source_id), jobs.get(job_id) if job_id else None
+            finished = (
+                (job is None or job.state in ("completed", "failed", "cancelled"))
+                if job_id
+                else (source is None or not source.active or source.generation != int(generation))
+            )
             if not finished:
                 continue
             self.flush_clips(self.buffers[key][-1][0] if self.buffers[key] else 0, key, force=True)
             if any(item[0] == key for item in self.pending.values()):
                 continue
+            releasable.append(key)
+        if releasable:
+            self.assert_owner()
             with self.sessions.begin() as db:
-                snapshot = db.get(RuntimeSnapshot, key)
-                if snapshot:
-                    db.delete(snapshot)
+                db.execute(delete(RuntimeSnapshot).where(RuntimeSnapshot.key.in_(releasable)))
+        for key in releasable:
+            source_id, _generation, job_id = parsed[key]
             if job_id:
                 iterator = self.video_jobs.pop(job_id, None)
                 if iterator is not None and hasattr(iterator, "close"):

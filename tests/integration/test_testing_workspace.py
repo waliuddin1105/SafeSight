@@ -258,6 +258,8 @@ def test_lost_worker_owner_connection_stops_processing(app):
 
     worker = Worker(app.extensions["safesight"])
     try:
+        if worker.owner_connection is None:
+            pytest.skip("Dedicated advisory-lock loss applies to PostgreSQL")
         worker.owner_connection.close()
         with pytest.raises(RuntimeError, match="ownership"):
             worker.tick()
