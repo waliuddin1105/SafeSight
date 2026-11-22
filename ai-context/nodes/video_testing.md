@@ -12,9 +12,11 @@ testing page. Uploaded footage/images use selected model slugs/versions and expl
 permission. Jobs snapshot their context and appear in persistent history. A still image is
 validated and encoded as a one-frame MP4 so decoding/inference stays inside the worker.
 Playback displays sampled boxes with an attached class/confidence badge, unknown intervals,
-seekable alerts, progress, cancellation and measured processing FPS. Box colors are stable by
-class and the HTML overlay keeps label text readable without stretching across video aspect
-ratios. Reloading the page retains job history.
+seekable alerts, progress, cancellation and measured processing FPS. Bright, lightly tinted box
+outlines remain distinct from their dark badge backgrounds. Badges sit outside small detections
+so they do not hide the detected region; labels for large edge-touching regions stay inside the
+frame. Colors are stable by class and the HTML overlay keeps text readable without stretching
+across video aspect ratios. Reloading the page retains job history.
 
 ## Inputs and outputs
 Inputs: video or image, selected versions, optional capture time and annotated event JSON;

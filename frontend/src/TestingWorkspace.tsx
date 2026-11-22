@@ -35,22 +35,27 @@ import {
 
 type TestMode = "video" | "webcam" | "image";
 
-const detectionColors: Record<string, string> = {
-  person: "#1d4ed8",
-  phone: "#15803d",
-  cigarette: "#a16207",
-  lighter: "#c2410c",
-  smoke: "#52525b",
-  fire: "#b91c1c",
-  upright: "#15803d",
-  seated: "#0369a1",
-  crouching_kneeling: "#a16207",
-  deep_bend: "#c2410c",
-  lying_on_floor: "#b91c1c",
+const detectionColors: Record<string, [outline: string, badge: string]> = {
+  person: ["#60a5fa", "#1e3a8a"],
+  phone: ["#4ade80", "#14532d"],
+  cigarette: ["#fde047", "#713f12"],
+  lighter: ["#fb923c", "#7c2d12"],
+  smoke: ["#e5e7eb", "#3f3f46"],
+  fire: ["#fb7185", "#991b1b"],
+  upright: ["#4ade80", "#14532d"],
+  seated: ["#38bdf8", "#075985"],
+  crouching_kneeling: ["#fde047", "#713f12"],
+  deep_bend: ["#fb923c", "#7c2d12"],
+  lying_on_floor: ["#fb7185", "#991b1b"],
 };
 
-function detectionColor(label: string): string {
-  return detectionColors[label] || "#b7ee88";
+function detectionColor(label: string): [string, string] {
+  return detectionColors[label] || ["#bef264", "#365314"];
+}
+
+function labelPosition(box: [number, number, number, number]): "above" | "below" | "inside" {
+  if (box[1] >= 0.055) return "above";
+  return box[3] - box[1] < 0.15 ? "below" : "inside";
 }
 
 const modes: Array<{
@@ -702,13 +707,15 @@ export function TestingWorkspace({
                 <div className="detection-overlay" aria-hidden="true">
                   {visible?.predictions.flatMap((prediction) =>
                     prediction.detections.map((detection, index) => {
-                      const color = detectionColor(detection.label);
+                      const [outline, badge] = detectionColor(detection.label);
+                      const placement = labelPosition(detection.box);
                       const style = {
                         left: `${detection.box[0] * 100}%`,
                         top: `${detection.box[1] * 100}%`,
                         width: `${(detection.box[2] - detection.box[0]) * 100}%`,
                         height: `${(detection.box[3] - detection.box[1]) * 100}%`,
-                        "--detection-color": color,
+                        "--detection-outline": outline,
+                        "--detection-badge": badge,
                       } as CSSProperties;
                       return (
                         <div
@@ -716,8 +723,11 @@ export function TestingWorkspace({
                           key={`${prediction.slug}-${detection.label}-${index}`}
                           style={style}
                         >
-                          <span className="detection-label">
-                            {detection.label.replaceAll("_", " ")} {detection.score.toFixed(2)}
+                          <span
+                            className={`detection-label ${placement}${detection.box[0] > 0.82 ? " align-right" : ""}`}
+                          >
+                            {detection.label.replaceAll("_", " ")}{" "}
+                            {detection.score.toFixed(2)}
                           </span>
                         </div>
                       );
