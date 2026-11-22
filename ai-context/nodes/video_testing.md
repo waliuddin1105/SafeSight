@@ -15,8 +15,10 @@ Playback displays sampled boxes with an attached class/confidence badge, unknown
 seekable alerts, progress, cancellation and measured processing FPS. Bright, lightly tinted box
 outlines remain distinct from their dark badge backgrounds. Badges sit outside small detections
 so they do not hide the detected region; labels for large edge-touching regions stay inside the
-frame. Colors are stable by class and the HTML overlay keeps text readable without stretching
-across video aspect ratios. Reloading the page retains job history.
+frame. A resize-aware collision layout measures the player, reserves each badge footprint and
+uses the nearest free position above, below or beside its box. Colors are stable by class and the
+HTML overlay keeps text readable without stretching across video aspect ratios. Reloading the
+page retains job history.
 
 ## Inputs and outputs
 Inputs: video or image, selected versions, optional capture time and annotated event JSON;

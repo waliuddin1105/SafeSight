@@ -31,6 +31,7 @@ import {
   type ModelStatus,
   type ListResponse,
   type Incident,
+  type Detection,
 } from "./types";
 
 type TestMode = "video" | "webcam" | "image";
@@ -53,9 +54,144 @@ function detectionColor(label: string): [string, string] {
   return detectionColors[label] || ["#bef264", "#365314"];
 }
 
-function labelPosition(box: [number, number, number, number]): "above" | "below" | "inside" {
-  if (box[1] >= 0.055) return "above";
-  return box[3] - box[1] < 0.15 ? "below" : "inside";
+interface OverlayDetection {
+  key: string;
+  detection: Detection;
+  caption: string;
+  boxStyle: CSSProperties;
+  labelStyle: CSSProperties;
+}
+
+interface Rectangle {
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
+}
+
+function overlaps(first: Rectangle, second: Rectangle): boolean {
+  const margin = 3;
+  return !(
+    first.right + margin <= second.left ||
+    second.right + margin <= first.left ||
+    first.bottom + margin <= second.top ||
+    second.bottom + margin <= first.top
+  );
+}
+
+function layoutDetectionOverlay(
+  predictions: JobFrame["predictions"] | undefined,
+  width: number,
+  height: number,
+): OverlayDetection[] {
+  if (!predictions?.length || width <= 0 || height <= 0) return [];
+  const raw = predictions.flatMap((prediction, predictionIndex) =>
+    prediction.detections.map((detection, detectionIndex) => ({
+      detection,
+      key: `${prediction.slug}-${predictionIndex}-${detection.label}-${detectionIndex}`,
+    })),
+  );
+  raw.sort((first, second) => {
+    const area = (item: (typeof raw)[number]) =>
+      (item.detection.box[2] - item.detection.box[0]) *
+      (item.detection.box[3] - item.detection.box[1]);
+    return area(second) - area(first) || first.detection.box[1] - second.detection.box[1];
+  });
+
+  const occupied: Rectangle[] = [];
+  return raw.map(({ detection, key }) => {
+    const [outline, badge] = detectionColor(detection.label);
+    const caption = `${detection.label.replaceAll("_", " ")} ${detection.score.toFixed(2)}`;
+    const fontSize = Math.max(9, Math.min(14, width * 0.012));
+    const labelWidth = Math.min(150, Math.max(58, caption.length * fontSize * 0.62 + 12));
+    const labelHeight = fontSize * 1.2 + 6;
+    const gap = 4;
+    const [left, top, right, bottom] = detection.box;
+    const box = {
+      left: left * width,
+      top: top * height,
+      right: right * width,
+      bottom: bottom * height,
+    };
+    const clampX = (value: number) => Math.max(gap, Math.min(width - labelWidth - gap, value));
+    const xCandidates = [
+      clampX(box.left),
+      clampX(box.right + gap),
+      clampX(box.left - labelWidth - gap),
+    ].filter((value, index, values) => values.indexOf(value) === index);
+    const yCandidates: number[] = [];
+    const addAbove = () => {
+      for (let lane = 0; lane < 6; lane += 1)
+        yCandidates.push(box.top - labelHeight - gap - lane * (labelHeight + gap));
+    };
+    const addBelow = () => {
+      for (let lane = 0; lane < 6; lane += 1)
+        yCandidates.push(box.bottom + gap + lane * (labelHeight + gap));
+    };
+    const largeEdgeRegion = top < 0.055 && (right - left) * (bottom - top) > 0.3;
+    if (largeEdgeRegion) {
+      yCandidates.push(box.top + gap);
+      addBelow();
+    } else if (top >= 0.055) {
+      addAbove();
+      addBelow();
+    } else {
+      addBelow();
+      addAbove();
+    }
+
+    const candidates = yCandidates.flatMap((candidateTop) =>
+      xCandidates.map((candidateLeft) => ({
+        left: candidateLeft,
+        top: candidateTop,
+        right: candidateLeft + labelWidth,
+        bottom: candidateTop + labelHeight,
+      })),
+    );
+    const inFrame = candidates.filter(
+      (candidate) => candidate.top >= gap && candidate.bottom <= height - gap,
+    );
+    const chosen =
+      inFrame.find((candidate) => occupied.every((placed) => !overlaps(candidate, placed))) ||
+      inFrame.reduce(
+        (best, candidate) => {
+          const collisions = occupied.filter((placed) => overlaps(candidate, placed)).length;
+          return collisions < best.collisions ? { candidate, collisions } : best;
+        },
+        {
+          candidate: {
+            left: clampX(box.left),
+            top: Math.max(gap, Math.min(height - labelHeight - gap, box.top + gap)),
+            right: clampX(box.left) + labelWidth,
+            bottom: Math.max(gap, Math.min(height - labelHeight - gap, box.top + gap)) + labelHeight,
+          },
+          collisions: Number.POSITIVE_INFINITY,
+        },
+      ).candidate;
+    occupied.push(chosen);
+    const colors = {
+      "--detection-outline": outline,
+      "--detection-badge": badge,
+    } as CSSProperties;
+    return {
+      key,
+      detection,
+      caption,
+      boxStyle: {
+        left: `${left * 100}%`,
+        top: `${top * 100}%`,
+        width: `${(right - left) * 100}%`,
+        height: `${(bottom - top) * 100}%`,
+        ...colors,
+      },
+      labelStyle: {
+        left: chosen.left,
+        top: chosen.top,
+        "--detection-font-size": `${fontSize}px`,
+        ...colors,
+      } as CSSProperties,
+    };
+  });
 }
 
 const modes: Array<{
@@ -122,7 +258,9 @@ export function TestingWorkspace({
       reason?: string;
     } | null>(null);
   const player = useRef<HTMLVideoElement>(null),
+    stage = useRef<HTMLDivElement>(null),
     [ratio, setRatio] = useState(16 / 9),
+    [stageSize, setStageSize] = useState({ width: 950, height: 534 }),
     epoch = useRef(0),
     cursor = useRef(-1);
 
@@ -287,6 +425,27 @@ export function TestingWorkspace({
             frame.timestamp <= position && position - frame.timestamp < 1,
         ),
     [frames, position],
+  );
+  useEffect(() => {
+    const element = stage.current;
+    if (!element) return;
+    const updateSize = () => {
+      const bounds = element.getBoundingClientRect();
+      if (bounds.width > 0 && bounds.height > 0)
+        setStageSize((current) =>
+          current.width === bounds.width && current.height === bounds.height
+            ? current
+            : { width: bounds.width, height: bounds.height },
+        );
+    };
+    updateSize();
+    const observer = new ResizeObserver(updateSize);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [job?.id]);
+  const overlayDetections = useMemo(
+    () => layoutDetectionOverlay(visible?.predictions, stageSize.width, stageSize.height),
+    [visible, stageSize],
   );
 
   return (
@@ -688,7 +847,7 @@ export function TestingWorkspace({
                   production-qualified.
                 </p>
               )}
-              <div className="video-stage" style={{ aspectRatio: ratio }}>
+              <div ref={stage} className="video-stage" style={{ aspectRatio: ratio }}>
                 <video
                   key={job.id}
                   ref={player}
@@ -705,34 +864,14 @@ export function TestingWorkspace({
                   }
                 />
                 <div className="detection-overlay" aria-hidden="true">
-                  {visible?.predictions.flatMap((prediction) =>
-                    prediction.detections.map((detection, index) => {
-                      const [outline, badge] = detectionColor(detection.label);
-                      const placement = labelPosition(detection.box);
-                      const style = {
-                        left: `${detection.box[0] * 100}%`,
-                        top: `${detection.box[1] * 100}%`,
-                        width: `${(detection.box[2] - detection.box[0]) * 100}%`,
-                        height: `${(detection.box[3] - detection.box[1]) * 100}%`,
-                        "--detection-outline": outline,
-                        "--detection-badge": badge,
-                      } as CSSProperties;
-                      return (
-                        <div
-                          className="detection-box"
-                          key={`${prediction.slug}-${detection.label}-${index}`}
-                          style={style}
-                        >
-                          <span
-                            className={`detection-label ${placement}${detection.box[0] > 0.82 ? " align-right" : ""}`}
-                          >
-                            {detection.label.replaceAll("_", " ")}{" "}
-                            {detection.score.toFixed(2)}
-                          </span>
-                        </div>
-                      );
-                    }),
-                  )}
+                  {overlayDetections.map((item) => (
+                    <div className="detection-box" key={`${item.key}-box`} style={item.boxStyle} />
+                  ))}
+                  {overlayDetections.map((item) => (
+                    <span className="detection-label" key={`${item.key}-label`} style={item.labelStyle}>
+                      {item.caption}
+                    </span>
+                  ))}
                 </div>
               </div>
               <div className="prediction-readout">

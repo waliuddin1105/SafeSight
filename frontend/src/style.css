@@ -668,6 +668,7 @@ footer span {
 }
 .detection-box {
   position: absolute;
+  z-index: 1;
   border: 2px solid var(--detection-outline, #bef264);
   background: color-mix(in srgb, var(--detection-outline, #bef264) 7%, transparent);
   box-shadow:
@@ -678,9 +679,9 @@ footer span {
 .detection-label {
   display: block;
   position: absolute;
-  left: -2px;
+  z-index: 2;
   width: max-content;
-  max-width: max(100%, 140px);
+  max-width: 150px;
   padding: 2px 5px;
   overflow: hidden;
   color: #fff;
@@ -688,25 +689,12 @@ footer span {
   border: 1px solid var(--detection-outline, #bef264);
   box-shadow: 0 1px 3px #000c;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: clamp(9px, 1.2vw, 14px);
+  font-size: var(--detection-font-size, 11px);
   font-weight: 700;
   line-height: 1.2;
   text-overflow: ellipsis;
   text-shadow: 0 1px 1px #0009;
   white-space: nowrap;
-}
-.detection-label.above {
-  bottom: calc(100% + 3px);
-}
-.detection-label.below {
-  top: calc(100% + 3px);
-}
-.detection-label.inside {
-  top: 3px;
-}
-.detection-label.align-right {
-  right: -2px;
-  left: auto;
 }
 .timeline {
   display: flex;
