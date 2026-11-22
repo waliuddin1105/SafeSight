@@ -62,3 +62,24 @@ def test_detection_deduplication_removes_nested_box_with_low_iou():
     ]
 
     assert deduplicate_detections(detections) == [detections[0]]
+
+
+def test_entrance_crossing_only_alerts_for_unverified_classification():
+    for classification in ("verified_entry", "unverified_entry", "no_entry", "indeterminate"):
+        policy = read_yaml("configs/inference.yaml")
+        policy["entrance_guard"]["post_crossing_seconds"] = 0
+        engine = Engine(
+            policy,
+            {"entrance_guard": {"unverified_entry": 0.5}},
+            {"crossing_line_y": 0.75, "guard_region": [0, 0, 0.2, 1]},
+        )
+        scores = {name: float(name == classification) for name in (
+            "verified_entry", "unverified_entry", "no_entry", "indeterminate"
+        )}
+        before = Detection("person", 0.99, (0.4, 0.1, 0.7, 0.7))
+        after = Detection("person", 0.99, (0.4, 0.1, 0.7, 0.8))
+        assert not engine.process([Prediction("entrance_guard", 0, scores=scores)], [before], 0)
+        alerts = engine.process([Prediction("entrance_guard", 0.2, scores=scores)], [after], 0.2)
+        assert bool(alerts) is (classification == "unverified_entry")
+        if classification in ("no_entry", "indeterminate"):
+            assert engine.unknown["entrance_guard"] == "Crossing observed but procedure is indeterminate"

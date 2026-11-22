@@ -340,12 +340,10 @@ class Engine:
             for track_id, (crossing_time, person) in list(self.pending_crossings.items()):
                 if timestamp - crossing_time >= self.config["entrance_guard"].get("post_crossing_seconds", 2):
                     del self.pending_crossings[track_id]
-                    if guard.unknown_reason or max(guard.scores, key=guard.scores.get, default="indeterminate") in (
-                        "indeterminate",
-                        "no_entry",
-                    ):
+                    classification = max(guard.scores, key=guard.scores.get, default="indeterminate")
+                    if guard.unknown_reason or classification in ("indeterminate", "no_entry"):
                         self.unknown["entrance_guard"] = "Crossing observed but procedure is indeterminate"
-                    else:
+                    elif classification == "unverified_entry":
                         add(
                             "entrance_guard",
                             "unverified_entry",
