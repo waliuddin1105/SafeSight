@@ -1,4 +1,11 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type FormEvent,
+} from "react";
 import {
   Activity,
   Camera,
@@ -27,6 +34,24 @@ import {
 } from "./types";
 
 type TestMode = "video" | "webcam" | "image";
+
+const detectionColors: Record<string, string> = {
+  person: "#1d4ed8",
+  phone: "#15803d",
+  cigarette: "#a16207",
+  lighter: "#c2410c",
+  smoke: "#52525b",
+  fire: "#b91c1c",
+  upright: "#15803d",
+  seated: "#0369a1",
+  crouching_kneeling: "#a16207",
+  deep_bend: "#c2410c",
+  lying_on_floor: "#b91c1c",
+};
+
+function detectionColor(label: string): string {
+  return detectionColors[label] || "#b7ee88";
+}
 
 const modes: Array<{
   id: TestMode;
@@ -674,23 +699,31 @@ export function TestingWorkspace({
                     )
                   }
                 />
-                <svg
-                  viewBox="0 0 1000 1000"
-                  preserveAspectRatio="none"
-                  aria-hidden="true"
-                >
+                <div className="detection-overlay" aria-hidden="true">
                   {visible?.predictions.flatMap((prediction) =>
-                    prediction.detections.map((detection, index) => (
-                      <rect
-                        key={prediction.slug + index}
-                        x={detection.box[0] * 1000}
-                        y={detection.box[1] * 1000}
-                        width={(detection.box[2] - detection.box[0]) * 1000}
-                        height={(detection.box[3] - detection.box[1]) * 1000}
-                      />
-                    )),
+                    prediction.detections.map((detection, index) => {
+                      const color = detectionColor(detection.label);
+                      const style = {
+                        left: `${detection.box[0] * 100}%`,
+                        top: `${detection.box[1] * 100}%`,
+                        width: `${(detection.box[2] - detection.box[0]) * 100}%`,
+                        height: `${(detection.box[3] - detection.box[1]) * 100}%`,
+                        "--detection-color": color,
+                      } as CSSProperties;
+                      return (
+                        <div
+                          className="detection-box"
+                          key={`${prediction.slug}-${detection.label}-${index}`}
+                          style={style}
+                        >
+                          <span className="detection-label">
+                            {detection.label.replaceAll("_", " ")} {detection.score.toFixed(2)}
+                          </span>
+                        </div>
+                      );
+                    }),
                   )}
-                </svg>
+                </div>
               </div>
               <div className="prediction-readout">
                 <small>{position.toFixed(1)} SECONDS</small>

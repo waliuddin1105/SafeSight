@@ -658,17 +658,38 @@ footer span {
   height: 100%;
   display: block;
 }
-.video-stage svg {
+.detection-overlay {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
   pointer-events: none;
+  overflow: hidden;
 }
-.video-stage rect {
-  fill: transparent;
-  stroke: #b7ee88;
-  stroke-width: 2;
+.detection-box {
+  position: absolute;
+  border: 2px solid var(--detection-color, #b7ee88);
+  box-shadow: 0 0 0 1px #0000004d;
+}
+.detection-label {
+  display: block;
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: max-content;
+  max-width: max(100%, 140px);
+  padding: 2px 5px;
+  overflow: hidden;
+  color: #fff;
+  background: var(--detection-color, #45623c);
+  box-shadow: 0 1px 2px #00000073;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: clamp(9px, 1.2vw, 14px);
+  font-weight: 700;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  text-shadow: 0 1px 1px #0009;
+  white-space: nowrap;
 }
 .timeline {
   display: flex;

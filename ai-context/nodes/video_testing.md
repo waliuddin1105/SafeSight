@@ -11,8 +11,10 @@ Authenticated users choose recorded footage, browser webcam or a still image on 
 testing page. Uploaded footage/images use selected model slugs/versions and explicit evaluation
 permission. Jobs snapshot their context and appear in persistent history. A still image is
 validated and encoded as a one-frame MP4 so decoding/inference stays inside the worker.
-Playback displays sampled boxes/scores, unknown intervals, seekable alerts, progress,
-cancellation and measured processing FPS. Reloading the page retains job history.
+Playback displays sampled boxes with an attached class/confidence badge, unknown intervals,
+seekable alerts, progress, cancellation and measured processing FPS. Box colors are stable by
+class and the HTML overlay keeps label text readable without stretching across video aspect
+ratios. Reloading the page retains job history.
 
 ## Inputs and outputs
 Inputs: video or image, selected versions, optional capture time and annotated event JSON;
