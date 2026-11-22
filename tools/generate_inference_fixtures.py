@@ -37,12 +37,21 @@ def generate() -> Path:
     root = ROOT / "tests/fixtures/inference-models"
     contract = hashlib.sha256(json.dumps(CLASSES, sort_keys=True).encode()).hexdigest()
     marker = root / "fixture.json"
+    valid = False
     if marker.exists():
         try:
-            if json.loads(marker.read_text()).get("contract") == contract:
+            metadata = json.loads(marker.read_text())
+            valid = metadata.get("contract") == contract and metadata.get("schema_version") == 2
+            for slug in CLASSES:
+                card = json.loads((root / slug / "model_card.json").read_text())
+                artifact = root / card["artifact"]
+                valid = valid and card["schema_version"] == 2 and card["run_id"] == "untrained-inference-fixture-v2"
+                valid = valid and artifact.is_file() and hashlib.sha256(artifact.read_bytes()).hexdigest() == card["sha256"]
+            if valid:
                 return root
-        except (json.JSONDecodeError, OSError):
+        except (json.JSONDecodeError, OSError, KeyError):
             pass
+    if root.exists():
         fixture_root = (ROOT / "tests/fixtures").resolve()
         if not root.resolve().is_relative_to(fixture_root):
             raise ValueError("Refusing to replace inference fixtures outside tests/fixtures")
@@ -70,20 +79,21 @@ def generate() -> Path:
             artifact = directory / "untrained.ts"
             torch.jit.script(BodyFixture() if slug == "body_state" else EntranceFixture()).save(str(artifact))
         card = {
-            "schema_version": 1,
+            "schema_version": 2,
             "slug": slug,
             "loader": "ultralytics" if slug in YOLO_SLUGS else "torchscript",
             "architecture": "untrained_inference_fixture",
             "classes": classes,
             "artifact": artifact.relative_to(root).as_posix(),
             "sha256": hashlib.sha256(artifact.read_bytes()).hexdigest(),
-            "run_id": "untrained-inference-fixture-v1",
+            "run_id": "untrained-inference-fixture-v2",
             "input_size": 128,
             "sequence_length": 10,
             "sequence_fps": 5,
             "thresholds": {"uncertain_smoke": 1.01},
             "quality": {"status": "FAIL", "reasons": ["Untrained synthetic runtime fixture; no quality metrics exist"]},
             "synthetic": True,
+            "postprocessing": {"inference_floor": 0.05, "display_floor": 0.10},
         }
         (directory / "model_card.json").write_text(json.dumps(card, indent=2))
     (root / "_pretrained").mkdir(exist_ok=True)
@@ -91,7 +101,9 @@ def generate() -> Path:
     target = root / "_pretrained/pose_landmarker_lite.task"
     if pose.resolve() != target.resolve():
         shutil.copyfile(pose, target)
-    marker.write_text(json.dumps({"synthetic": True, "trained": False, "seed": 42, "contract": contract}))
+    marker.write_text(
+        json.dumps({"schema_version": 2, "synthetic": True, "trained": False, "seed": 42, "contract": contract})
+    )
     return root
 
 

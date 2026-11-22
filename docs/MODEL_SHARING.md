@@ -74,7 +74,8 @@ assets separately using tools/fetch_pretrained.py; the pose asset must match the
 card's context_asset_sha256 when specified. Model transfer does not establish
 accuracy or replace joint smoking/fire fusion evaluation.
 
-Weights/card and available training_config.json/training_report.json are bundled; detailed qualification galleries and dataset provenance remain on
+Weights/card, available training_config.json/training_report.json, and matching qualification
+attestations are bundled; detailed qualification galleries and dataset provenance remain on
 the training computer unless separately shared. No real trained weights exist yet,
 so transfer checks use inert synthetic files. Remote HTTPS transfer remains unverified.
 

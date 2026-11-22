@@ -29,6 +29,12 @@ from safesight.config import ROOT, read_yaml, resolve_path
 from safesight.contracts import CLASSES, YOLO_SLUGS
 from safesight.ingestion.video import frames
 from safesight.model_loaders.registry import PoseExtractor, Registry, entrance_frame, select_device
+from safesight.contracts.model_card import (
+    DeploymentPointer,
+    ModelCard,
+    QualificationAttestation,
+    contract_sha256,
+)
 from training.common.assets import fetch
 from training.common.checkpoints import restore_state
 from training.common.datasets import Validation, jsonl, sha256, validate
@@ -610,7 +616,7 @@ def main(slug: str) -> int:
     if pose_asset.resolve() != (model_root / "_pretrained" / pose_asset.name).resolve():
         shutil.copyfile(pose_asset, model_root / "_pretrained" / pose_asset.name)
     card = {
-        "schema_version": 1,
+        "schema_version": 2,
         "slug": slug,
         "loader": "ultralytics" if slug in YOLO_SLUGS else "torchscript",
         "architecture": config["architecture"],
@@ -623,6 +629,12 @@ def main(slug: str) -> int:
         "sequence_fps": config["sequence_fps"],
         "preprocessing": "v1",
         "thresholds": {},
+        "postprocessing": {
+            "nms_iou": config.get("nms_iou", 0.45),
+            "containment_threshold": config.get("containment_threshold", 0.8),
+            "inference_floor": config.get("inference_floor", 0.05),
+            "display_floor": config.get("display_floor", 0.10),
+        },
         "quality": {"status": "FAIL", "reasons": ["Evaluation in progress"]},
         "synthetic": args.smoke,
         "dataset_hash": result.dataset_hash,
@@ -685,17 +697,30 @@ def main(slug: str) -> int:
 def qualify_version(slug: str, version: Path, dataset: Path, config: dict) -> int:
     """Evaluate a frozen version without fitting or changing its weights."""
     card = json.loads((version / "model_card.json").read_text())
+    parsed_card = ModelCard.model_validate(card)
     model_root = version.parents[2]
-    run = version / "qualification"
-    run.mkdir(exist_ok=True)
-    previous = run / "report.json"
-    if previous.exists():
-        print("Reusing completed qualification; test data is not replayed")
-        return 0 if json.loads(previous.read_text())["quality"]["status"] == "PASS" else 2
     training = validate(dataset, slug, card["synthetic"], qualification=False)
     if training.dataset_hash != card.get("training_dataset_hash", card["dataset_hash"]):
         raise ValueError("Training samples differ from the frozen model; qualification rejected")
     result = validate(dataset, slug, card["synthetic"], qualification=True)
+    qualification_config = {
+        "slug": slug,
+        "image_size": config["image_size"],
+        "quality": config["quality"],
+        "temporal_policy": card["temporal_policy"],
+    }
+    qualification_config_hash = hashlib.sha256(
+        json.dumps(qualification_config, sort_keys=True).encode()
+    ).hexdigest()
+    qualification_id = hashlib.sha256(
+        f"{contract_sha256(parsed_card)}:{result.dataset_hash}:{qualification_config_hash}".encode()
+    ).hexdigest()[:20]
+    run = version / "qualifications" / qualification_id
+    run.mkdir(parents=True, exist_ok=True)
+    previous = run / "report.json"
+    if previous.exists():
+        print("Reusing matching completed qualification; test data is not replayed")
+        return 0 if json.loads(previous.read_text())["quality"]["status"] == "PASS" else 2
     result.write(run)
     if not result.valid:
         raise ValueError("Qualification dataset invalid: " + "; ".join(result.errors))
@@ -720,7 +745,6 @@ def qualify_version(slug: str, version: Path, dataset: Path, config: dict) -> in
             val_cache, slug, inference_config, config["quality"]["precision"], config["quality"]
         )
         # Every choice is frozen before the held-out test is touched for evaluation.
-        card["thresholds"] = thresholds
         validation_metrics = replay(val_cache, slug, inference_config, thresholds)
         write_json(run / "calibration.json", {"thresholds": thresholds, "curves": curves})
         if slug in YOLO_SLUGS:
@@ -755,12 +779,22 @@ def qualify_version(slug: str, version: Path, dataset: Path, config: dict) -> in
         model_metrics["evaluation_scope"] = "frozen_model_test_split"
         event_metrics["evaluation_scope"] = "deployed_preprocessing_fusion_and_temporal_pipeline"
         quality = quality_gate(config, result, model_metrics, event_metrics, thresholds, validation_metrics)
-        card.update(
+        attestation = QualificationAttestation(
+            slug=slug,
+            run_id=parsed_card.run_id,
+            model_card_sha256=contract_sha256(parsed_card),
             qualification_dataset_hash=result.dataset_hash,
+            qualification_config_hash=qualification_config_hash,
+            thresholds=thresholds,
             quality=quality,
-            metrics={"model": model_metrics, "events": event_metrics},
+            metrics={
+                "model": model_metrics,
+                "events": event_metrics,
+                "validation_events": validation_metrics,
+            },
+            created_at=datetime.now(timezone.utc).isoformat(),
         )
-        write_json(version / "model_card.json", card)
+        write_json(run / "attestation.json", attestation.model_dump(mode="json"))
         report = {
             "slug": slug,
             "synthetic": card["synthetic"],
@@ -775,7 +809,6 @@ def qualify_version(slug: str, version: Path, dataset: Path, config: dict) -> in
         }
         failure_gallery(dataset, run / "failures", event_metrics.get("failure_examples", []))
         write_json(run / "report.json", report)
-        write_json(version / "report.json", report)
         lines = (
             [
                 f"# {slug} training report",
@@ -787,9 +820,17 @@ def qualify_version(slug: str, version: Path, dataset: Path, config: dict) -> in
             + ["\n## Measured results", "```json", json.dumps(report, indent=2), "```"]
         )
         (run / "report.md").write_text("\n".join(lines), encoding="utf-8")
-        shutil.copyfile(run / "report.md", version / "report.md")
         if quality["status"] == "PASS" and not card["synthetic"]:
-            write_json(model_root / slug / "model_card.json", card)
+            deployment = DeploymentPointer(
+                slug=slug,
+                run_id=parsed_card.run_id,
+                model_card=(version / "model_card.json").relative_to(model_root).as_posix(),
+                model_card_sha256=contract_sha256(parsed_card),
+                qualification=(run / "attestation.json").relative_to(model_root).as_posix(),
+                qualification_sha256=contract_sha256(attestation),
+                activated_at=datetime.now(timezone.utc).isoformat(),
+            )
+            write_json(model_root / slug / "deployment.json", deployment.model_dump(mode="json"))
         print(f"{slug}: software execution completed; quality {quality['status']}; report {run / 'report.md'}")
         for reason in quality["reasons"]:
             print(f"  {reason}")

@@ -2,7 +2,6 @@
 
 from contextlib import contextmanager
 from datetime import timedelta
-import hashlib
 from collections import deque
 import logging
 import time
@@ -14,6 +13,7 @@ from safesight.ingestion.video import frames
 from safesight.model_loaders.registry import Registry
 from safesight.storage.schema import Job, Source, ModelVersion, RuntimeSnapshot, utcnow
 from safesight.inference.state import loads
+from safesight.contracts.model_card import contract_sha256
 
 
 class ChunkCommitError(RuntimeError):
@@ -36,6 +36,7 @@ def pinned(worker, job):
             evaluation=snapshot["evaluation"],
             selected={s: f"{s}/model_card.json" for s in snapshot["cards"]},
             cards=snapshot["cards"],
+            qualifications=snapshot.get("qualifications"),
             reusable=worker.registry,
             pose_asset=snapshot["policy"]["pose_asset"],
         )
@@ -53,7 +54,7 @@ def pinned(worker, job):
                     row = ModelVersion(
                         slug=slug,
                         run_id=card.run_id,
-                        card_hash=hashlib.sha256(card.model_dump_json().encode()).hexdigest(),
+                        card_hash=contract_sha256(card),
                         artifact_hash=card.sha256,
                         quality=card.quality,
                     )
@@ -61,7 +62,7 @@ def pinned(worker, job):
                     db.flush()
                 ids[slug] = row.id
         policy = registry.temporal_policy(snapshot["policy"])
-        thresholds = {s: dict(a.card.thresholds) for s, a in registry.adapters.items()}
+        thresholds = {s: dict(values) for s, values in registry.event_thresholds.items()}
         worker.job_contexts[key] = registry, policy, thresholds, ids
     old = worker.registry, worker.policy, worker.thresholds, worker.model_ids, worker.fingerprint, worker.fusion_enabled
     registry, policy, thresholds, ids = worker.job_contexts[key]

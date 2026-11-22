@@ -17,8 +17,10 @@ python tools/qualify_model.py phone_usage RUN_ID
 
 Qualification uses the saved training configuration, rejects changed training samples,
 calibrates on validation events, evaluates held-out test data and writes a separate
-qualification report/hash. Repeated qualification reuses its completed report.
-Synthetic candidates never auto-activate. A production PASS is required for activation.
+qualification attestation/hash without mutating the trained card. Repeated qualification
+reuses only a completed report with the same card, dataset, and configuration hashes; changed
+evaluation data creates a new attestation. Synthetic candidates never auto-activate. A
+production PASS is required for deployment.
 
 Frozen classifier representations are content-addressed and disk-backed. Sample staging
 is collision-safe. Interrupted/memory-failed classifier epochs restore full model,

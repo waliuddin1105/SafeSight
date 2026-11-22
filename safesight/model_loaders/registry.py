@@ -15,7 +15,12 @@ import numpy as np
 import torch
 from safesight.config import within
 from safesight.contracts import CLASSES, Detection, Prediction
-from safesight.contracts.model_card import ModelCard
+from safesight.contracts.model_card import (
+    DeploymentPointer,
+    ModelCard,
+    QualificationAttestation,
+    contract_sha256,
+)
 
 LOG = logging.getLogger(__name__)
 
@@ -157,11 +162,9 @@ class YoloAdapter:
         from ultralytics import YOLO
 
         self.card, self.device = card, device
-        postprocessing = (card.model_extra or {}).get("postprocessing", {})
-        self.nms_iou = float(postprocessing.get("nms_iou", 0.45))
-        self.containment_threshold = float(postprocessing.get("containment_threshold", 0.8))
-        if not 0 < self.nms_iou <= 1 or not 0 < self.containment_threshold <= 1:
-            raise ValueError("Detection post-processing thresholds must be in (0, 1]")
+        self.nms_iou = card.postprocessing.nms_iou
+        self.containment_threshold = card.postprocessing.containment_threshold
+        self.inference_floor = card.postprocessing.inference_floor
         self.model = YOLO(str(artifact), task="detect")
         if list(self.model.names.values()) != card.classes:
             raise ValueError("Weights and model-card classes differ")
@@ -173,11 +176,12 @@ class YoloAdapter:
         """Batch detector work while preserving input order and per-frame coordinates."""
         if len(images) != len(timestamps) or not images:
             raise ValueError("Images and timestamps must be nonempty and aligned")
+        inference_floor = getattr(self, "inference_floor", self.card.postprocessing.inference_floor)
         results = self.model.predict(
             [rgb[:, :, ::-1] for rgb in images],
             imgsz=self.card.input_size,
             device=self.device,
-            conf=0.01,
+            conf=inference_floor,
             iou=self.nms_iou,
             agnostic_nms=False,
             verbose=False,
@@ -207,7 +211,7 @@ class YoloAdapter:
             if crop_images:
                 crop_results = self.model.predict(
                     crop_images, imgsz=self.card.input_size, device=self.device,
-                    conf=0.01, verbose=False,
+                    conf=inference_floor, verbose=False,
                 )
             else:
                 crop_results = []
@@ -303,6 +307,7 @@ class Registry:
         selected: dict[str, str] | None = None,
         pose_asset: str = "_pretrained/pose_landmarker_lite.task",
         cards: dict | None = None,
+        qualifications: dict | None = None,
         reusable: Registry | None = None,
         lazy: bool = False,
     ):
@@ -312,6 +317,8 @@ class Registry:
         self.lazy = lazy
         self.adapters: dict[str, Adapter] = {}
         self.cards: dict[str, ModelCard] = {}
+        self.qualifications: dict[str, QualificationAttestation] = {}
+        self.event_thresholds: dict[str, dict[str, float]] = {}
         self.artifacts: dict[str, Path] = {}
         self.status: dict[str, dict] = {}
         self.pose: PoseExtractor | None = None
@@ -319,7 +326,34 @@ class Registry:
         self.owns_pose = True
         self.reusable = reusable
         for slug in selected if selected is not None else CLASSES:
+            qualification = None
             relative_card = (selected or {}).get(slug, f"{slug}/model_card.json")
+            if selected is None and cards is None:
+                deployment_path = within(self.root, f"{slug}/deployment.json")
+                if deployment_path.is_file():
+                    try:
+                        deployment = DeploymentPointer.model_validate_json(
+                            deployment_path.read_text(encoding="utf-8")
+                        )
+                        if deployment.slug != slug:
+                            raise ValueError("Deployment slug differs from selected use case")
+                        relative_card = deployment.model_card
+                        deployed_card = ModelCard.model_validate_json(
+                            within(self.root, relative_card).read_text(encoding="utf-8")
+                        )
+                        qualification = QualificationAttestation.model_validate_json(
+                            within(self.root, deployment.qualification).read_text(encoding="utf-8")
+                        )
+                        if (
+                            contract_sha256(deployed_card) != deployment.model_card_sha256
+                            or contract_sha256(qualification) != deployment.qualification_sha256
+                            or qualification.model_card_sha256 != deployment.model_card_sha256
+                            or qualification.quality.get("status") != "PASS"
+                        ):
+                            raise ValueError("Deployment hashes or qualification status are invalid")
+                    except (OSError, ValueError, KeyError) as error:
+                        self.status[slug] = {"ready": False, "reason": str(error)}
+                        continue
             card_path = within(self.root, relative_card)
             if cards is None and not card_path.is_file():
                 version_cards = sorted((self.root / slug / "versions").glob("*/model_card.json"))
@@ -346,8 +380,16 @@ class Registry:
                     if cards is not None
                     else ModelCard.model_validate_json(card_path.read_text(encoding="utf-8"))
                 )
+                if qualifications and slug in qualifications:
+                    qualification = QualificationAttestation.model_validate(qualifications[slug])
+                if qualification and (
+                    qualification.slug != slug
+                    or qualification.run_id != card.run_id
+                    or qualification.model_card_sha256 != contract_sha256(card)
+                ):
+                    raise ValueError("Qualification does not match the selected model card")
                 if (
-                    card.schema_version != 1
+                    card.schema_version not in (1, 2)
                     or card.preprocessing != "v1"
                     or card.slug != slug
                     or card.classes != CLASSES[slug]
@@ -360,7 +402,10 @@ class Registry:
                     raise ValueError("Preprocessing pose asset differs from the calibrated model context")
                 if slug in ("body_state", "phone_usage", "cigarette_smoking", "entrance_guard") and not self.pose_path.is_file():
                     raise ValueError("Required pretrained pose context asset is missing")
-                if (card.synthetic or card.quality.get("status") != "PASS") and not evaluation:
+                effective_quality = qualification.quality if qualification else card.quality
+                if card.schema_version == 2 and qualification is None and not evaluation:
+                    raise ValueError("Model has no matching qualification; explicit evaluation mode required")
+                if (card.synthetic or effective_quality.get("status") != "PASS") and not evaluation:
                     raise ValueError("Model failed production gate; explicit evaluation mode required")
                 artifact = within(self.root, card.artifact)
                 if not artifact.is_file():
@@ -370,13 +415,19 @@ class Registry:
                 if card.loader not in ("ultralytics", "torchscript"):
                     raise ValueError(f"Unsupported loader: {card.loader}")
                 self.cards[slug], self.artifacts[slug] = card, artifact
+                if qualification:
+                    self.qualifications[slug] = qualification
+                self.event_thresholds[slug] = dict(
+                    qualification.thresholds if qualification else card.thresholds
+                )
                 self.status[slug] = {
                     "ready": True,
                     "loaded": False,
                     "run_id": card.run_id,
-                    "quality": card.quality,
+                    "quality": effective_quality,
                     "synthetic": card.synthetic,
-                    "evaluation_only": card.synthetic or card.quality.get("status") != "PASS",
+                    "evaluation_only": card.synthetic or effective_quality.get("status") != "PASS",
+                    "display_floor": card.postprocessing.display_floor,
                 }
             except (OSError, ValueError, RuntimeError, KeyError) as error:
                 self.status[slug] = {"ready": False, "reason": str(error)}

@@ -3,10 +3,12 @@
 import hashlib
 import json
 
+import pytest
 import torch
 
 from safesight.contracts import CLASSES
 from safesight.model_loaders.registry import Registry, YoloAdapter, ModelCard
+from safesight.contracts.model_card import DeploymentPointer, QualificationAttestation, contract_sha256
 
 
 class FixedClassifier(torch.nn.Module):
@@ -123,6 +125,76 @@ def test_missing_selected_card_and_artifact_do_not_expose_device_paths(tmp_path)
         "Model artifact referenced by the card is not installed on this device"
     )
     registry.close()
+
+
+def test_v2_deployment_binds_immutable_card_and_qualification(tmp_path):
+    version = tmp_path / "fire_smoke/versions/run-1"
+    qualification_directory = version / "qualifications/q1"
+    qualification_directory.mkdir(parents=True)
+    artifact = version / "model.bin"
+    artifact.write_bytes(b"fixture")
+    card = ModelCard(
+        schema_version=2,
+        slug="fire_smoke",
+        loader="ultralytics",
+        architecture="fixture",
+        classes=CLASSES["fire_smoke"],
+        artifact="fire_smoke/versions/run-1/model.bin",
+        sha256=hashlib.sha256(artifact.read_bytes()).hexdigest(),
+        run_id="run-1",
+        input_size=64,
+        thresholds={},
+        quality={"status": "FAIL", "reasons": ["qualification required"]},
+    )
+    (version / "model_card.json").write_text(card.model_dump_json(indent=2))
+    qualification = QualificationAttestation(
+        slug="fire_smoke",
+        run_id="run-1",
+        model_card_sha256=contract_sha256(card),
+        qualification_dataset_hash="dataset",
+        qualification_config_hash="1" * 64,
+        thresholds={"fire": 0.7},
+        quality={"status": "PASS", "reasons": []},
+        metrics={},
+        created_at="2026-11-22T00:00:00+00:00",
+    )
+    qualification_path = qualification_directory / "attestation.json"
+    qualification_path.write_text(qualification.model_dump_json(indent=2))
+    deployment = DeploymentPointer(
+        slug="fire_smoke",
+        run_id="run-1",
+        model_card="fire_smoke/versions/run-1/model_card.json",
+        model_card_sha256=contract_sha256(card),
+        qualification="fire_smoke/versions/run-1/qualifications/q1/attestation.json",
+        qualification_sha256=contract_sha256(qualification),
+        activated_at="2026-11-22T00:00:00+00:00",
+    )
+    (tmp_path / "fire_smoke/deployment.json").write_text(deployment.model_dump_json(indent=2))
+    registry = Registry(tmp_path, evaluation=False, device="cpu", lazy=True)
+    try:
+        assert registry.status["fire_smoke"]["ready"]
+        assert registry.status["fire_smoke"]["evaluation_only"] is False
+        assert registry.event_thresholds["fire_smoke"] == {"fire": 0.7}
+    finally:
+        registry.close()
+
+
+def test_detector_display_floor_cannot_be_below_inference_floor():
+    with pytest.raises(ValueError, match="display_floor"):
+        ModelCard(
+            schema_version=2,
+            slug="fire_smoke",
+            loader="ultralytics",
+            architecture="fixture",
+            classes=CLASSES["fire_smoke"],
+            artifact="model.pt",
+            sha256="0" * 64,
+            run_id="fixture",
+            input_size=64,
+            thresholds={},
+            quality={"status": "FAIL"},
+            postprocessing={"inference_floor": 0.2, "display_floor": 0.1},
+        )
 
 
 def test_smoking_batch_maps_crop_boxes_to_each_original_frame():

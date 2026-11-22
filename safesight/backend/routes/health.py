@@ -67,7 +67,7 @@ def ready():
 @bp.get("/api/v1/models/versions")
 @authenticated
 def model_versions():
-    from safesight.contracts.model_card import ModelCard
+    from safesight.contracts.model_card import ModelCard, QualificationAttestation, contract_sha256
     from safesight.config import within
 
     items = []
@@ -83,8 +83,25 @@ def model_versions():
                 if card.run_id in seen or card.slug != slug:
                     continue
                 seen.add(card.run_id)
+                quality = card.quality
+                if card.schema_version == 2:
+                    matching = []
+                    for qualification_path in path.parent.glob("qualifications/*/attestation.json"):
+                        qualification = QualificationAttestation.model_validate_json(
+                            qualification_path.read_text(encoding="utf-8")
+                        )
+                        if qualification.model_card_sha256 == contract_sha256(card):
+                            matching.append(qualification)
+                    if matching:
+                        quality = max(matching, key=lambda item: item.created_at).quality
                 items.append(
-                    {"slug": slug, "run_id": card.run_id, "quality": card.quality, "synthetic": card.synthetic}
+                    {
+                        "slug": slug,
+                        "run_id": card.run_id,
+                        "quality": quality,
+                        "synthetic": card.synthetic,
+                        "display_floor": card.postprocessing.display_floor,
+                    }
                 )
             except (ValueError, OSError):
                 continue

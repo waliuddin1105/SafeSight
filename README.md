@@ -86,7 +86,7 @@ completed reports are reused rather than silently evaluating test again. YOLO ch
 are under the run's fit/weights directory; classifier checkpoints are run/last.pt.
 
 Runs write artifacts/runs/SLUG/RUN_ID and models/SLUG/versions/RUN_ID, including reports
-and model cards. Training exit 0 means fitting/validation completed, not a production
+and immutable schema-v2 model cards. Training exit 0 means fitting/validation completed, not a production
 quality PASS. Structural/execution failures exit 1. Training never auto-activates a model.
 Versioned model weights use Git LFS so every contributor receives the same immutable
 cards and binaries. Run `git lfs install` once and `git lfs pull` after cloning or pulling;
@@ -99,8 +99,9 @@ python tools/qualify_model.py phone_usage RUN_ID
 ```
 
 Qualification exits 0 for PASS, 2 for completed quality FAIL and 1 for execution/data
-errors. Only passing real-data qualification can activate a model. Synthetic artifacts
-remain evaluation-only. See [improvements and verification](docs/IMPROVEMENTS.md).
+errors. It writes a hashed attestation without changing the trained card. Only a matching
+real-data PASS can create a production deployment pointer. Synthetic artifacts remain
+evaluation-only. See [improvements and verification](docs/IMPROVEMENTS.md).
 
 Only passing real-data versions activate automatically. Select an existing candidate with:
 

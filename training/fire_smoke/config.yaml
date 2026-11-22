@@ -14,6 +14,8 @@
   "workers": 2,
   "amp": true,
   "image_size": 640,
+  "inference_floor": 0.05,
+  "display_floor": 0.1,
   "architecture": "yolo11s",
   "hidden_sizes": [
     128,

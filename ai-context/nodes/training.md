@@ -9,6 +9,7 @@ links:
 - adr-0005
 - architecture
 - quality
+- adr-0013
 ---
 # Training
 
@@ -29,6 +30,10 @@ Before validation, materialize_splits creates or verifies fingerprinted source-g
 Recipes are colocated at training/<slug>/config.yaml; old configs/training paths were removed.
 
 Image training and frozen qualification are separate commands; see docs/IMPROVEMENTS.md and ADR 0008.
+
+New training emits immutable schema-v2 cards. Each distinct qualification dataset/configuration
+creates a hashed attestation under the version directory; it never rewrites the trained card.
+A real PASS writes a deployment pointer bound to both hashes. See ADR 0013.
 
 Validation-only comparison and measured failure galleries are implemented; see ADR 0009.
 

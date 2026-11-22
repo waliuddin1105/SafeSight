@@ -26,6 +26,7 @@ models/**
 !models/**/versions/
 !models/**/versions/**/
 !models/**/versions/**/model_card.json
+!models/**/versions/**/qualifications/**/attestation.json
 !models/**/versions/**/*.pt
 !models/**/versions/**/*.pth
 !models/**/versions/**/*.onnx

@@ -10,10 +10,8 @@ from safesight.backend.supabase_auth import SupabaseAuth
 from safesight.config import settings
 from safesight.storage.database import database
 from safesight.storage.schema import Base, User
-from safesight.contracts import SLUGS, CLASSES
-from safesight.model_loaders.registry import ModelCard
-from training.common.datasets import sha256
-from safesight.config import within
+from safesight.contracts import SLUGS
+from safesight.model_loaders.registry import Registry
 
 
 def main() -> int:
@@ -42,30 +40,21 @@ def main() -> int:
             )
         client = SupabaseAuth(cfg["supabase_url"], cfg["supabase_publishable_key"])
         report["auth_available"] = bool(client.request("settings"))
-        for slug in SLUGS:
-            card = cfg["models_root"] / slug / "model_card.json"
-            if not card.is_file():
-                report["models"][slug] = "missing"
-                continue
-            try:
-                parsed = ModelCard.model_validate_json(card.read_text())
-                if (
-                    parsed.slug != slug
-                    or parsed.classes != CLASSES[slug]
-                    or sha256(within(cfg["models_root"], parsed.artifact)) != parsed.sha256
-                ):
-                    raise ValueError("Artifact/card mismatch")
-                pose = within(cfg["models_root"], "_pretrained/pose_landmarker_lite.task")
-                expected_pose = (parsed.model_extra or {}).get("context_asset_sha256")
-                if expected_pose and (not pose.is_file() or sha256(pose) != expected_pose):
-                    raise ValueError("Pose preprocessing asset mismatch")
+        registry = Registry(cfg["models_root"], evaluation=True, lazy=True)
+        try:
+            for slug in SLUGS:
+                state = registry.status[slug]
                 report["models"][slug] = (
-                    "qualified"
-                    if parsed.quality.get("status") == "PASS" and not parsed.synthetic
+                    "invalid_card_or_artifact"
+                    if not state.get("ready") and state.get("available_versions") is None
+                    else "missing"
+                    if not state.get("ready")
                     else "evaluation_only"
+                    if state.get("evaluation_only")
+                    else "qualified"
                 )
-            except (ValueError, OSError):
-                report["models"][slug] = "invalid_card_or_artifact"
+        finally:
+            registry.close()
     except Exception as error:
         report["error"] = type(error).__name__
         report["message"] = "Check database/Auth settings, network and migrations; credential details suppressed"

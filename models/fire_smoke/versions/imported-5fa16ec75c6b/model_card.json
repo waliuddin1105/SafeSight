@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "slug": "fire_smoke",
   "loader": "ultralytics",
   "architecture": "yolo11m",
@@ -13,7 +13,9 @@
   "input_size": 640,
   "postprocessing": {
     "nms_iou": 0.45,
-    "containment_threshold": 0.8
+    "containment_threshold": 0.8,
+    "inference_floor": 0.05,
+    "display_floor": 0.1
   },
   "thresholds": {},
   "quality": {

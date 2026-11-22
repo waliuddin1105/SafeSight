@@ -79,7 +79,7 @@ def test_pinned_job_survives_active_card_replacement_and_cancels_running(app, mo
             )
         assert worker.tick()
         predictions = client.get(f"/api/v1/jobs/{job['id']}/predictions").json["items"]
-        assert predictions and predictions[0]["predictions"][0]["model_version"] == "untrained-inference-fixture-v1"
+        assert predictions and predictions[0]["predictions"][0]["model_version"] == "untrained-inference-fixture-v2"
         client.post(f"/api/v1/jobs/{job['id']}/cancel", headers=headers)
         worker.tick()
         assert client.get(f"/api/v1/jobs/{job['id']}").json["state"] == "cancelled"
@@ -173,7 +173,7 @@ def test_still_image_runs_through_pinned_worker_job(app):
         "/api/v1/uploads",
         data={
             "models": '["fire_smoke"]',
-            "versions": '{"fire_smoke":"untrained-inference-fixture-v1"}',
+            "versions": '{"fire_smoke":"untrained-inference-fixture-v2"}',
             "evaluation": "true",
             "file": (io.BytesIO(image.getvalue()), "inspection.png"),
         },

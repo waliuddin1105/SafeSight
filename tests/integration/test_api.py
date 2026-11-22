@@ -2,6 +2,7 @@
 
 import io
 import os
+import shutil
 
 from PIL import Image
 import pytest
@@ -21,6 +22,8 @@ def app(tmp_path):
     url = os.getenv("SAFESIGHT_TEST_DATABASE_URL", "sqlite:///" + str(tmp_path / "test.sqlite"))
     if not url.startswith("sqlite") and not url.endswith("/safesight_test"):
         raise ValueError("Refusing to initialize a non-test database")
+    models = tmp_path / "models"
+    shutil.copytree(inference_fixtures(), models)
     app = create_app(
         {
             "database_url": url,
@@ -28,7 +31,7 @@ def app(tmp_path):
             "supabase_url": "https://auth.example.test",
             "supabase_publishable_key": "sb_publishable_fixture",
             "media_root": tmp_path / "media",
-            "models_root": inference_fixtures(),
+            "models_root": models,
             "evaluation_mode": True,
             "minimum_free_bytes": 0,
         }

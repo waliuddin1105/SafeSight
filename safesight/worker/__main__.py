@@ -22,6 +22,7 @@ from safesight.inference.engine import Engine
 from safesight.inference.state import dumps, loads, blob_references
 from safesight.ingestion.video import write_video
 from safesight.model_loaders.registry import Registry
+from safesight.contracts.model_card import contract_sha256
 from safesight.storage.database import database
 from safesight.storage.schema import (
     Evidence,
@@ -73,15 +74,14 @@ class Worker:
             lazy=True,
         )
         self.policy = self.registry.temporal_policy(read_yaml(self.config["inference_config"]))
-        self.thresholds = {s: dict(card.thresholds) for s, card in self.registry.cards.items()}
+        self.thresholds = {s: dict(values) for s, values in self.registry.event_thresholds.items()}
         self.fusion_enabled = False
         fusion_path = self.registry.root / "fusion_card.json"
         if fusion_path.exists():
             fusion = json.loads(fusion_path.read_text())
             matching = set(fusion.get("models", {})) == {"cigarette_smoking", "fire_smoke"} and all(
                 s in self.registry.cards
-                and (self.registry.root / s / "model_card.json").exists()
-                and hashlib.sha256((self.registry.root / s / "model_card.json").read_bytes()).hexdigest() == digest
+                and contract_sha256(self.registry.cards[s]) == digest
                 for s, digest in fusion.get("models", {}).items()
             )
             if fusion.get("status") == "PASS" and matching and fusion.get("policy") == self.policy:
@@ -158,7 +158,7 @@ class Worker:
                     row = ModelVersion(
                         slug=slug,
                         run_id=card.run_id,
-                        card_hash=hashlib.sha256(card.model_dump_json().encode()).hexdigest(),
+                        card_hash=contract_sha256(card),
                         artifact_hash=card.sha256,
                         quality=card.quality,
                     )

@@ -14,7 +14,7 @@ import zipfile
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from safesight.config import resolve_path, settings, within
 from safesight.contracts import CLASSES, SLUGS
-from safesight.model_loaders.registry import ModelCard
+from safesight.contracts.model_card import ModelCard, QualificationAttestation, contract_sha256
 from training.common.dataset_preparation import extract, file_hash, open_url
 
 
@@ -29,7 +29,7 @@ def checked_card(root: Path, slug: str, run_id: str) -> tuple[Path, ModelCard]:
         card.slug != slug
         or card.run_id != run_id
         or card.classes != CLASSES[slug]
-        or card.schema_version != 1
+        or card.schema_version not in (1, 2)
         or card.preprocessing != "v1"
         or not artifact.is_relative_to(version)
         or artifact.name == "model_card.json"
@@ -49,6 +49,7 @@ def export_model(root: Path, slug: str, run_id: str, output: Path) -> str:
     if output.exists() or sidecar.exists():
         raise ValueError("Export destination already exists; choose a new name")
     metadata = [p for p in (card.parent / "training_config.json", card.parent / "training_report.json") if p.is_file()]
+    metadata.extend(card.parent.glob("qualifications/*/attestation.json"))
     files = {p.relative_to(root).as_posix(): file_hash(p) for p in (artifact, card, *metadata)}
     with zipfile.ZipFile(output, "x", compression=zipfile.ZIP_STORED) as archive:
         for name in files:
@@ -83,8 +84,28 @@ def fetch_model(root: Path, source: str, checksum: str) -> Path:
             raise ValueError("Unsupported bundle schema")
         slug, run_id = bundle["slug"], bundle["run_id"]
         artifact, _ = checked_card(extracted, slug, run_id)
+        parsed_card = ModelCard.model_validate_json(
+            (extracted / slug / "versions" / run_id / "model_card.json").read_text(encoding="utf-8")
+        )
+        for path in (extracted / slug / "versions" / run_id / "qualifications").glob("*/attestation.json"):
+            qualification = QualificationAttestation.model_validate_json(path.read_text(encoding="utf-8"))
+            if (
+                qualification.slug != slug
+                or qualification.run_id != run_id
+                or qualification.model_card_sha256 != contract_sha256(parsed_card)
+            ):
+                raise ValueError("Bundled qualification does not match its model card")
         expected = {artifact.relative_to(extracted).as_posix(), f"{slug}/versions/{run_id}/model_card.json"}
-        optional = {f"{slug}/versions/{run_id}/training_config.json", f"{slug}/versions/{run_id}/training_report.json"}
+        optional = {
+            f"{slug}/versions/{run_id}/training_config.json",
+            f"{slug}/versions/{run_id}/training_report.json",
+            *{
+                path
+                for path in bundle["files"]
+                if path.startswith(f"{slug}/versions/{run_id}/qualifications/")
+                and path.endswith("/attestation.json")
+            },
+        }
         if not expected.issubset(bundle["files"]) or not set(bundle["files"]).issubset(expected | optional):
             raise ValueError("Bundle must contain selected weights/card and only approved training metadata")
         expected = set(bundle["files"])

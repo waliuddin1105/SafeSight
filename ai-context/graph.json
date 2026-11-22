@@ -147,6 +147,19 @@
       "path": "decisions/0012-git-lfs-model-versions.md"
     },
     {
+      "id": "adr-0013",
+      "type": "decision",
+      "status": "accepted",
+      "links": [
+        "artifacts",
+        "training",
+        "inference",
+        "quality",
+        "adr-0012"
+      ],
+      "path": "decisions/0013-immutable-model-qualification.md"
+    },
+    {
       "id": "index",
       "type": "index",
       "status": "implemented",
@@ -211,6 +224,7 @@
       "links": [
         "adr-0006",
         "adr-0012",
+        "adr-0013",
         "architecture",
         "verification"
       ],
@@ -446,7 +460,8 @@
       "links": [
         "adr-0010",
         "architecture",
-        "quality"
+        "quality",
+        "adr-0013"
       ],
       "path": "nodes/inference.md"
     },
@@ -548,7 +563,8 @@
         "adr-0006",
         "adr-0005",
         "architecture",
-        "quality"
+        "quality",
+        "adr-0013"
       ],
       "path": "nodes/training.md"
     },
@@ -786,6 +802,26 @@
       "to": "adr-0006"
     },
     {
+      "from": "adr-0013",
+      "to": "artifacts"
+    },
+    {
+      "from": "adr-0013",
+      "to": "training"
+    },
+    {
+      "from": "adr-0013",
+      "to": "inference"
+    },
+    {
+      "from": "adr-0013",
+      "to": "quality"
+    },
+    {
+      "from": "adr-0013",
+      "to": "adr-0012"
+    },
+    {
       "from": "index",
       "to": "architecture"
     },
@@ -928,6 +964,10 @@
     {
       "from": "artifacts",
       "to": "adr-0012"
+    },
+    {
+      "from": "artifacts",
+      "to": "adr-0013"
     },
     {
       "from": "artifacts",
@@ -1202,6 +1242,10 @@
       "to": "quality"
     },
     {
+      "from": "inference",
+      "to": "adr-0013"
+    },
+    {
       "from": "operations",
       "to": "deployment"
     },
@@ -1320,6 +1364,10 @@
     {
       "from": "training",
       "to": "quality"
+    },
+    {
+      "from": "training",
+      "to": "adr-0013"
     },
     {
       "from": "verification",

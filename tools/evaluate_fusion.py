@@ -10,6 +10,7 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from safesight.config import read_yaml, resolve_path, settings, within
 from safesight.model_loaders.registry import Registry
+from safesight.contracts.model_card import contract_sha256
 from training.common.datasets import jsonl, sha256, video_info, validate_event_record
 from training.common.evaluation import cache_predictions, calibrate, replay
 
@@ -62,7 +63,7 @@ def evaluate(config: dict) -> dict:
             if training_groups & {r["group_id"] for r in val_items + test_items}:
                 raise ValueError(f"Fusion footage overlaps {slug} training scenes/sessions")
         val = cache_predictions(registry, "fire_smoke", dataset, "val", val_items)
-        thresholds = {s: dict(registry.adapters[s].card.thresholds) for s in slugs}
+        thresholds = {s: dict(registry.event_thresholds[s]) for s in slugs}
         curves = {}
         for slug in slugs:
             for item in val:
@@ -112,7 +113,7 @@ def evaluate(config: dict) -> dict:
             "schema_version": 1,
             "status": "FAIL" if reasons else "PASS",
             "reasons": reasons,
-            "models": {s: sha256(root / s / "model_card.json") for s in slugs},
+            "models": {s: contract_sha256(registry.cards[s]) for s in slugs},
             "policy": policy,
             "thresholds": thresholds,
             "validation": validation_metrics,
