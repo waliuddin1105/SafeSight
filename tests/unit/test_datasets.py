@@ -5,7 +5,7 @@ import shutil
 
 import pytest
 
-from training.common.datasets import audit_cross_dataset, sha256, validate
+from training.common.datasets import sha256, validate, valid_yolo_box
 from training.common.fixtures import generate
 
 
@@ -52,6 +52,11 @@ def test_exact_duplicate(data):
 
 def test_synthetic_requires_opt_in(data):
     assert not validate(data, "phone_usage").valid
+
+
+def test_yolo_boundary_rounding_is_valid_but_real_overflow_is_not():
+    assert valid_yolo_box(0.03320312, 0.34236111, 0.06640625, 0.13194444)
+    assert not valid_yolo_box(0.9, 0.5, 0.5, 0.2)
 
 
 def test_graph_rejects_orphan(tmp_path):

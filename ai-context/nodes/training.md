@@ -33,3 +33,8 @@ Image training and frozen qualification are separate commands; see docs/IMPROVEM
 Validation-only comparison and measured failure galleries are implemented; see ADR 0009.
 
 Checkpoint restoration is shared by resume and OOM rollback and tested with inert state objects. Qualification uses the frozen card policy and receiving model-root assets. Optional recipes travel with model bundles.
+
+YOLO mixed precision is enabled only on CUDA. A hardware-specific physical batch can be
+larger while `nbs` preserves the effective batch. Both PyTorch OOM exceptions and CUDA
+runtime OOM messages restore the last complete checkpoint before reducing physical batch;
+resolution, epoch ceiling and quality targets are not silently reduced.

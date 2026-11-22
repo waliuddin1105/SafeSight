@@ -13,6 +13,7 @@ import zipfile
 import pytest
 
 from training.common.dataset_preparation import archive_path, download, extract, file_hash, install_native, prepare
+from tools.prepare_fire_smoke_corpus import register_sample, repair_dfire_labels, yolo_lines
 from tools.prepare_datasets import main
 
 
@@ -185,6 +186,77 @@ def test_plan_mode_has_no_dataset_writes(tmp_path):
     target = tmp_path / "not-created"
     assert main(["all", "--plan", "--datasets-root", str(target)]) == 0
     assert not target.exists()
+
+
+def test_fire_smoke_conversion_and_exact_deduplication(tmp_path):
+    labels = yolo_lines(
+        [
+            {"class_id": 0, "class_name": "smoke_visible", "bbox_xywh": [10, 20, 30, 40]},
+            {"class_id": 1, "class_name": "flame_visible", "bbox_xywh": [50, 40, 20, 20]},
+        ],
+        width=100,
+        height=100,
+    )
+    assert labels.decode().splitlines() == [
+        "0 0.25000000 0.40000000 0.30000000 0.40000000",
+        "1 0.60000000 0.50000000 0.20000000 0.20000000",
+    ]
+    records, seen = [], {}
+    arguments = {
+        "root": tmp_path,
+        "records": records,
+        "seen": seen,
+        "stem": "source/frame 1",
+        "image_bytes": b"image-fixture",
+        "label_bytes": labels,
+        "suffix": ".jpg",
+        "source_id": "source-1",
+        "group_id": "scene-1",
+        "publisher": "fixture",
+        "license_name": "test-only",
+        "publisher_sample_id": "frame 1",
+    }
+    assert register_sample(**arguments)
+    assert not register_sample(**arguments)
+    assert len(records) == 1
+    assert (tmp_path / records[0]["path"]).read_bytes() == b"image-fixture"
+    assert (tmp_path / records[0]["annotation"]).read_bytes() == labels
+
+
+def test_dfire_repairs_degenerate_and_out_of_bounds_boxes():
+    content = b"0 0.5 0.5 0 0\n1 0.5 0.5 1.2 0.8\n"
+    repaired, classes, dropped, clipped = repair_dfire_labels(content)
+    assert classes == ["1"]
+    assert dropped == 1
+    assert clipped == 1
+    assert repaired == b"1 0.50000000 0.50000000 1.00000000 0.80000000\n"
+
+
+def test_register_sample_reconciles_only_an_original_publisher_label(tmp_path):
+    records = []
+    seen = {}
+    arguments = {
+        "root": tmp_path,
+        "records": records,
+        "seen": seen,
+        "stem": "frame",
+        "image_bytes": b"image",
+        "label_bytes": b"1 0.5 0.5 1.0 0.8\n",
+        "suffix": ".jpg",
+        "source_id": "source",
+        "group_id": "group",
+        "publisher": "publisher",
+        "license_name": "test",
+        "publisher_sample_id": "frame",
+        "publisher_label_bytes": b"1 0.5 0.5 1.2 0.8\n",
+    }
+    image_hash = hashlib.sha256(b"image").hexdigest()
+    label = tmp_path / "labels" / "publisher" / f"frame-{image_hash[:12]}.txt"
+    label.parent.mkdir(parents=True)
+    label.write_bytes(arguments["publisher_label_bytes"])
+
+    assert register_sample(**arguments)
+    assert label.read_bytes() == arguments["label_bytes"]
 
 
 def test_reviewed_native_bundle_installs_and_emits_config_without_training(tmp_path, monkeypatch):

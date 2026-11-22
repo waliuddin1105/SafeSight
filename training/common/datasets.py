@@ -46,6 +46,19 @@ def valid_box(box: list[float]) -> bool:
     return len(box) == 4 and all(np.isfinite(box)) and 0 <= box[0] < box[2] <= 1 and 0 <= box[1] < box[3] <= 1
 
 
+def valid_yolo_box(x: float, y: float, width: float, height: float, tolerance: float = 1e-6) -> bool:
+    """Validate normalized YOLO xywh while tolerating harmless decimal edge rounding."""
+    values = (x, y, width, height)
+    if not all(np.isfinite(values)) or not 0 <= x <= 1 or not 0 <= y <= 1 or width <= 0 or height <= 0:
+        return False
+    return (
+        x - width / 2 >= -tolerance
+        and y - height / 2 >= -tolerance
+        and x + width / 2 <= 1 + tolerance
+        and y + height / 2 <= 1 + tolerance
+    )
+
+
 def validate_event_record(item: dict, duration: float, allowed: list[str]) -> None:
     """Require complete event timing, actor/hazard localization and visibility labels."""
     if not item.get("source_id") or not item.get("group_id") or not isinstance(item.get("events"), list):
@@ -245,9 +258,7 @@ def validate(root: Path, slug: str, allow_synthetic: bool = False, *, qualificat
                             raise ValueError("YOLO label requires five fields")
                         class_id = int(parts[0])
                         x, y, w, h = map(float, parts[1:])
-                        if not 0 <= class_id < len(classes) or not valid_box(
-                            [x - w / 2, y - h / 2, x + w / 2, y + h / 2]
-                        ):
+                        if not 0 <= class_id < len(classes) or not valid_yolo_box(x, y, w, h):
                             raise ValueError("Invalid class or normalized YOLO box")
                         counts[split][classes[class_id]] += 1
                     if not any(line.strip() for line in lines):

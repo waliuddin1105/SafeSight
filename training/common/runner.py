@@ -172,7 +172,7 @@ def fit_yolo(config: dict, dataset: Path, run: Path, device: str, resume: Path |
                     name="fit",
                     exist_ok=True,
                     pretrained=True,
-                    amp=False,
+                    amp=bool(config.get("amp", True) and device.startswith("cuda")),
                     plots=False,
                     cache=False,
                     save=True,
@@ -191,7 +191,11 @@ def fit_yolo(config: dict, dataset: Path, run: Path, device: str, resume: Path |
             best = Path(model.trainer.best)
             config["effective_batch_size"] = batch
             return best, YOLO(str(best))
-        except torch.cuda.OutOfMemoryError:
+        except (torch.cuda.OutOfMemoryError, RuntimeError) as error:
+            if not isinstance(error, torch.cuda.OutOfMemoryError) and (
+                not device.startswith("cuda") or "out of memory" not in str(error).lower()
+            ):
+                raise
             if batch == 1:
                 raise RuntimeError("GPU memory exhausted at batch 1; use device: cpu or a larger GPU")
             last = run / "fit/weights/last.pt"
