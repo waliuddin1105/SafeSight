@@ -24,3 +24,6 @@ Small-object crop inference maps boxes back to the original frame. Strong fire i
 YOLO inference applies class-aware NMS followed by containment-aware deduplication. The highest-confidence box is retained when same-class boxes substantially overlap or one is nested inside another. Overlap between different classes, such as fire inside smoke, is deliberately preserved. Model cards may override `postprocessing.nms_iou` and `postprocessing.containment_threshold`; defaults are 0.45 and 0.8.
 
 Registry can load explicit pinned cards and reuse compatible global adapters/pose without duplicating weights. Full-frame/crop and temporal settings remain versioned.
+The worker does not execute shared pose context for fire/smoke-only jobs. Pose is evaluated
+only when a selected, ready model consumes people/keypoints; smoking/fire fusion therefore
+retains pose while standalone fire and smoke detection avoids the CPU-only pose pass.

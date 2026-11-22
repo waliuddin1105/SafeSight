@@ -59,7 +59,7 @@ def test_cancel_history_and_auth_protection(app):
         worker.close()
 
 
-def test_pinned_job_survives_active_card_replacement_and_cancels_running(app):
+def test_pinned_job_survives_active_card_replacement_and_cancels_running(app, monkeypatch):
     client = app.test_client()
     login = signin(client)
     job, headers = submit(app, client, login.json["csrf_token"])
@@ -71,6 +71,12 @@ def test_pinned_job_survives_active_card_replacement_and_cancels_running(app):
     card_path.write_text(json.dumps(changed))
     worker = Worker(app.extensions["safesight"])
     try:
+        if worker.registry.pose:
+            monkeypatch.setattr(
+                worker.registry.pose,
+                "extract",
+                lambda _rgb: (_ for _ in ()).throw(AssertionError("fire/smoke-only job requested pose")),
+            )
         assert worker.tick()
         predictions = client.get(f"/api/v1/jobs/{job['id']}/predictions").json["items"]
         assert predictions and predictions[0]["predictions"][0]["model_version"] == "untrained-inference-fixture-v1"

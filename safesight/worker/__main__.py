@@ -41,6 +41,13 @@ from safesight.storage.schema import (
 
 LOG = logging.getLogger(__name__)
 
+POSE_CONTEXT_MODELS = frozenset({"body_state", "phone_usage", "cigarette_smoking", "entrance_guard"})
+
+
+def needs_pose_context(enabled_models, available_models) -> bool:
+    """Return whether selected, loadable models consume person keypoints or tracks."""
+    return bool(POSE_CONTEXT_MODELS.intersection(enabled_models).intersection(available_models))
+
 
 class Worker:
     """Own model instances and temporal state in one process."""
@@ -249,7 +256,12 @@ class Worker:
                 except (RuntimeError, ValueError) as error:
                     LOG.exception("Inference failed for %s", slug)
                     self.registry.status[slug] = {"ready": False, "reason": str(error)}
-        people = self.registry.pose.extract(rgb) if self.registry.pose else []
+        people = (
+            self.registry.pose.extract(rgb)
+            if self.registry.pose
+            and needs_pose_context(source.enabled_models, self.registry.adapters)
+            else []
+        )
         alerts = self.engines[key].process(predictions, people, timestamp)
         self.assert_owner()
         with self.sessions.begin() as db:

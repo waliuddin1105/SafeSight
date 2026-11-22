@@ -24,3 +24,8 @@ Snapshots use a typed JSON codec with compressed media, not executable pickle. R
 Recovery media is stored as immutable checksum-addressed files under MEDIA_ROOT/recovery. Database snapshots hold references; periodic collection removes obsolete blocks. No full media window is rewritten into PostgreSQL each frame.
 
 Pinned jobs process decoding/inference outside database transactions. Dedicated ownership is checked by backend PID before writes. Native capture uses a terminable subprocess. See ADR 0010.
+
+Per-frame pose extraction is conditional on a selected, available pose-dependent model
+(`body_state`, `phone_usage`, `cigarette_smoking`, or `entrance_guard`). Fire/smoke-only
+jobs skip MediaPipe; fire detection, smoke spread, smoothing, and uncertainty remain active.
+Qualified smoking/fire fusion still receives pose because selecting smoking requires it.
