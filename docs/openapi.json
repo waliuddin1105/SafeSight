@@ -1101,6 +1101,44 @@
         "summary": "uploads job_predictions"
       }
     },
+    "/api/v1/jobs/{job_id}/results": {
+      "get": {
+        "operationId": "uploads_job_results_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "401": {
+            "description": "Sign-in required"
+          },
+          "403": {
+            "description": "Permission or CSRF failure"
+          },
+          "503": {
+            "description": "Dependency unavailable"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "uploads job_results"
+      }
+    },
     "/api/v1/jobs/{job_id}/video": {
       "get": {
         "operationId": "uploads_job_video_get",
@@ -1307,6 +1345,35 @@
           }
         ],
         "summary": "health openapi_contract"
+      }
+    },
+    "/api/v1/overview": {
+      "get": {
+        "operationId": "overview_overview_get",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "401": {
+            "description": "Sign-in required"
+          },
+          "403": {
+            "description": "Permission or CSRF failure"
+          },
+          "503": {
+            "description": "Dependency unavailable"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "overview overview"
       }
     },
     "/api/v1/sources": {

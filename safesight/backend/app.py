@@ -15,7 +15,7 @@ from safesight.storage.database import database
 
 from safesight.backend.errors import register_handlers
 from safesight.backend.cli import grant_user
-from safesight.backend.routes import auth, sources, uploads, incidents, health, frontend
+from safesight.backend.routes import auth, sources, uploads, incidents, health, frontend, overview
 
 
 def create_app(overrides: dict | None = None) -> Flask:
@@ -53,6 +53,7 @@ def create_app(overrides: dict | None = None) -> Flask:
     app.register_blueprint(uploads.bp)
     app.register_blueprint(incidents.bp)
     app.register_blueprint(health.bp)
+    app.register_blueprint(overview.bp)
     app.register_blueprint(frontend.bp)
     app.cli.add_command(grant_user)
     return app

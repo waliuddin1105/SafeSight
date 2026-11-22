@@ -19,6 +19,7 @@ import {
   type Slug,
   type Job,
   type JobFrame,
+  type JobResults,
   type ModelVersion,
   type ModelStatus,
   type ListResponse,
@@ -152,7 +153,7 @@ export function TestingWorkspace({
       }
     };
     poll();
-    const timer = setInterval(poll, 2000);
+    const timer = setInterval(poll, 10000);
     return () => {
       controller.abort();
       clearInterval(timer);
@@ -163,7 +164,9 @@ export function TestingWorkspace({
     const id = job.id,
       controller = new AbortController(),
       current = ++epoch.current;
-    let pending = false;
+    let pending = false,
+      catchup: ReturnType<typeof setTimeout> | undefined,
+      timer: ReturnType<typeof setInterval> | undefined;
     cursor.current = -1;
     setFrames([]);
     setAlerts([]);
@@ -171,30 +174,21 @@ export function TestingWorkspace({
       if (pending) return;
       pending = true;
       try {
-        const [detail, predictions, incidents, measured] = await Promise.all([
-          api<Job>("/jobs/" + id, { signal: controller.signal }),
-          api<{ items: JobFrame[]; next_after: number | null }>(
-            "/jobs/" + id + "/predictions?after=" + cursor.current,
-            { signal: controller.signal },
-          ),
-          api<{ items: Incident[] }>("/jobs/" + id + "/incidents", {
-            signal: controller.signal,
-          }),
-          api<{
-            available: boolean;
-            precision?: number | null;
-            recall?: number | null;
-            reason?: string;
-          }>("/jobs/" + id + "/metrics", { signal: controller.signal }),
-        ]);
+        const result = await api<JobResults>(
+          "/jobs/" + id + "/results?after=" + cursor.current,
+          { signal: controller.signal },
+        );
         if (current !== epoch.current) return;
-        setJob(detail);
-        setAlerts(incidents.items);
-        setMetrics(measured);
-        if (predictions.items.length) {
-          setFrames((old) => [...old, ...predictions.items].slice(-5000));
-          cursor.current = predictions.next_after ?? cursor.current;
+        setJob(result.job);
+        setAlerts(result.incidents);
+        setMetrics(result.metrics);
+        if (result.frames.length) {
+          setFrames((old) => [...old, ...result.frames].slice(-5000));
+          cursor.current = result.next_after ?? cursor.current;
         }
+        if (result.has_more) catchup = setTimeout(poll, 0);
+        if (["completed", "failed", "cancelled"].includes(result.job.state) && timer)
+          clearInterval(timer);
       } catch (reason) {
         if ((reason as Error).name !== "AbortError")
           setError((reason as Error).message);
@@ -203,11 +197,12 @@ export function TestingWorkspace({
       }
     };
     poll();
-    const timer = setInterval(poll, 2000);
+    timer = setInterval(poll, 2000);
     return () => {
       epoch.current++;
       controller.abort();
-      clearInterval(timer);
+      if (timer) clearInterval(timer);
+      if (catchup) clearTimeout(catchup);
     };
   }, [job?.id]);
 

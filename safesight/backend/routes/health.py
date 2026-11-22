@@ -22,21 +22,26 @@ from safesight.backend.security import authenticated
 bp = Blueprint("health", __name__)
 
 
+def model_state(db) -> dict:
+    """Return worker freshness and per-model readiness without another transaction."""
+    state = db.get(SystemState, "worker")
+    fresh = bool(
+        state
+        and utcnow() - state.updated_at.replace(tzinfo=timezone.utc)
+        < timedelta(seconds=cfg["worker_lease_seconds"])
+    )
+    return {
+        "items": state.value.get("models", {}) if state else {},
+        "evaluation_mode": cfg["evaluation_mode"],
+        "worker_alive": fresh,
+    }
+
+
 @bp.get("/api/v1/models")
 @authenticated
 def models():
     with sessions() as db:
-        state = db.get(SystemState, "worker")
-        fresh = bool(
-            state
-            and utcnow() - state.updated_at.replace(tzinfo=timezone.utc)
-            < timedelta(seconds=cfg["worker_lease_seconds"])
-        )
-        return jsonify(
-            items=state.value.get("models", {}) if state else {},
-            evaluation_mode=cfg["evaluation_mode"],
-            worker_alive=fresh,
-        )
+        return jsonify(model_state(db))
 
 
 @bp.get("/api/v1/health/live")

@@ -24,9 +24,7 @@ import {
   type ModelStatus,
   type Incident,
   type AuthResponse,
-  type ListResponse,
-  type Collection,
-  type ModelsResponse,
+  type OverviewResponse,
 } from "./types";
 import "./style.css";
 function App() {
@@ -87,19 +85,14 @@ function App() {
       if (v)
         params.set(k, k === "from" || k === "to" ? localTimeToIso(v, zone) : v);
     });
-    const [s, l, m, i] = await Promise.all([
-      api<Collection<Source>>("/sources"),
-      api<Collection<Location>>("/locations"),
-      api<ModelsResponse>("/models"),
-      api<ListResponse<Incident>>("/incidents?" + params),
-    ]);
+    const response = await api<OverviewResponse>("/overview?" + params);
     if (current !== generation.current) return;
-    setSources(s.items);
-    setLocations(l.items);
-    setModels(m.items);
-    setWorker(m.worker_alive);
-    setItems(i.items);
-    setTotal(i.total);
+    setSources(response.sources);
+    setLocations(response.locations);
+    setModels(response.models.items);
+    setWorker(response.models.worker_alive);
+    setItems(response.incidents.items);
+    setTotal(response.incidents.total);
   }, [page, filters, zone]);
   useEffect(() => {
     if (!user || view !== "overview") return;
@@ -117,7 +110,7 @@ function App() {
       }
     };
     poll();
-    const timer = setInterval(poll, 2000);
+    const timer = setInterval(poll, 5000);
     return () => {
       active = false;
       generation.current++;

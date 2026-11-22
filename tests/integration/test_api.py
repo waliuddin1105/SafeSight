@@ -122,6 +122,10 @@ def test_auth_capture_incident_evidence_and_review(app, monkeypatch):
     assert review.status_code == 200
     assert client.get("/api/v1/incidents?status=confirmed").json["total"] == 1
     assert len(client.get("/api/v1/incidents/" + incident["id"]).json["reviews"]) == 1
+    overview = client.get("/api/v1/overview?type=fire_smoke&status=confirmed").json
+    assert overview["incidents"]["total"] == 1
+    assert overview["sources"][0]["id"] == source["id"]
+    assert overview["models"]["worker_alive"] is True
     assert client.get("/api/v1/incidents?from=invalid").status_code == 400
 
 

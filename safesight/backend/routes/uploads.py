@@ -245,38 +245,76 @@ def job_incidents(job_id):
 @authenticated
 def job_metrics(job_id):
     from safesight.storage.schema import Incident
-    from safesight.inference.engine import iou
 
     with sessions() as db:
         job = record(db, Job, job_id)
-        truth = job.snapshot.get("ground_truth")
-        if truth is None or job.state != "completed":
-            return jsonify(available=False, reason="Compatible ground truth and a completed job are required")
         predictions = list(db.scalars(select(Incident).where(Incident.event_key.startswith(job_id))))
-        used = set()
-        for prediction in predictions:
-            matches = []
-            for index, event in enumerate(truth["events"]):
-                overlap = min(prediction.end_offset, event["end"]) - max(prediction.start_offset, event["start"])
-                box = prediction.details.get("box")
-                if (
-                    index not in used
-                    and prediction.slug == event["slug"]
-                    and prediction.subtype == event["subtype"]
-                    and overlap > 0
-                    and box
-                    and iou(box, event["box"]) >= 0.1
-                ):
-                    matches.append((overlap, index))
-            if matches:
-                used.add(max(matches)[1])
-        tp, fp, fn = len(used), len(predictions) - len(used), len(truth["events"]) - len(used)
+        return jsonify(metrics_payload(job, predictions))
+
+
+def metrics_payload(job, predictions) -> dict:
+    """Compute testing metrics only from explicitly supplied compatible truth."""
+    from safesight.inference.engine import iou
+
+    truth = job.snapshot.get("ground_truth")
+    if truth is None or job.state != "completed":
+        return {"available": False, "reason": "Compatible ground truth and a completed job are required"}
+    used = set()
+    for prediction in predictions:
+        matches = []
+        for index, event in enumerate(truth["events"]):
+            overlap = min(prediction.end_offset, event["end"]) - max(prediction.start_offset, event["start"])
+            box = prediction.details.get("box")
+            if (
+                index not in used
+                and prediction.slug == event["slug"]
+                and prediction.subtype == event["subtype"]
+                and overlap > 0
+                and box
+                and iou(box, event["box"]) >= 0.1
+            ):
+                matches.append((overlap, index))
+        if matches:
+            used.add(max(matches)[1])
+    tp, fp, fn = len(used), len(predictions) - len(used), len(truth["events"]) - len(used)
+    return {
+        "available": True,
+        "true_positive": tp,
+        "false_positive": fp,
+        "false_negative": fn,
+        "precision": tp / (tp + fp) if tp + fp else None,
+        "recall": tp / (tp + fn) if tp + fn else None,
+        "note": "User-supplied event annotations; testing result only, not production qualification",
+    }
+
+
+@bp.get("/api/v1/jobs/<job_id>/results")
+@authenticated
+def job_results(job_id):
+    """Return one coherent testing snapshot and incremental prediction page."""
+    from safesight.storage.schema import Incident
+
+    after = float(request.args.get("after", -1))
+    with sessions() as db:
+        job = record(db, Job, job_id)
+        frame_rows = list(
+            db.scalars(
+                select(JobFrame)
+                .where(JobFrame.job_id == job_id, JobFrame.timestamp > after)
+                .order_by(JobFrame.timestamp)
+                .limit(251)
+            )
+        )
+        has_more = len(frame_rows) > 250
+        frame_rows = frame_rows[:250]
+        incident_rows = list(
+            db.scalars(select(Incident).where(Incident.event_key.startswith(job_id)).order_by(Incident.start_offset))
+        )
         return jsonify(
-            available=True,
-            true_positive=tp,
-            false_positive=fp,
-            false_negative=fn,
-            precision=tp / (tp + fp) if tp + fp else None,
-            recall=tp / (tp + fn) if tp + fn else None,
-            note="User-supplied event annotations; testing result only, not production qualification",
+            job=serialize(job),
+            frames=[serialize(row) for row in frame_rows],
+            next_after=frame_rows[-1].timestamp if frame_rows else None,
+            has_more=has_more,
+            incidents=[serialize(row) for row in incident_rows],
+            metrics=metrics_payload(job, incident_rows),
         )

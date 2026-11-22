@@ -119,6 +119,8 @@ def test_concurrent_refresh_rotates_once(app):
 def test_openapi_covers_routes_and_public_job_fields(app):
     specification = build(app)
     assert "/api/v1/jobs/{job_id}/cancel" in specification["paths"]
+    assert "/api/v1/jobs/{job_id}/results" in specification["paths"]
+    assert "/api/v1/overview" in specification["paths"]
     upload = specification["paths"]["/api/v1/uploads"]["post"]["requestBody"]["content"][
         "multipart/form-data"
     ]["schema"]
@@ -216,6 +218,11 @@ def test_recording_commits_multiple_frames_per_worker_tick(app):
             assert 1 < current.processed_frames <= 8
             assert current.cursor > 0
         assert len(client.get(f"/api/v1/jobs/{job['id']}/predictions").json["items"]) > 1
+        results = client.get(f"/api/v1/jobs/{job['id']}/results?after=-1").json
+        assert results["job"]["id"] == job["id"]
+        assert len(results["frames"]) > 1
+        assert results["next_after"] == results["frames"][-1]["timestamp"]
+        assert results["has_more"] is False
     finally:
         worker.close()
 

@@ -45,3 +45,10 @@ Vite development proxy explicitly preserves the browser-facing Host (changeOrigi
 Readiness requires a live worker and at least one available model; per-model status
 still reports unavailable models. Overview polling pauses while the Testing page is
 open, reducing repeated authenticated database requests.
+
+`GET /api/v1/overview` returns sources, locations, worker/model health and the canonical
+filtered incident page from one database session. `GET /api/v1/jobs/{id}/results`
+returns job state, incremental prediction frames, incidents and optional user-truth
+metrics. Existing granular routes remain compatible. The overview polls every five
+seconds while visible; active testing results poll every two seconds, drain paginated
+frames, and stop at a terminal state. Job history refreshes every ten seconds.

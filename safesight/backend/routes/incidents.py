@@ -27,14 +27,13 @@ from safesight.backend.validation import payload, valid_identifier, record
 bp = Blueprint("incidents", __name__)
 
 
-@bp.get("/api/v1/incidents")
-@authenticated
-def incidents():
-    if request.args.get("location"):
-        valid_identifier(request.args["location"])
-    if request.args.get("type") and request.args["type"] not in SLUGS:
+def incident_collection(db, args) -> dict:
+    """Return the canonical filtered incident page for standalone and aggregate APIs."""
+    if args.get("location"):
+        valid_identifier(args["location"])
+    if args.get("type") and args["type"] not in SLUGS:
         abort(400, "Unknown incident type")
-    if request.args.get("status") and request.args["status"] not in ("pending", "confirmed", "dismissed"):
+    if args.get("status") and args["status"] not in ("pending", "confirmed", "dismissed"):
         abort(400, "Unknown review status")
     query = select(Incident)
     for arg, column in (
@@ -42,23 +41,29 @@ def incidents():
         ("location", Incident.location_id),
         ("status", Incident.review_status),
     ):
-        if request.args.get(arg):
-            query = query.where(column == request.args[arg])
+        if args.get(arg):
+            query = query.where(column == args[arg])
     for arg, operator in (("from", "ge"), ("to", "le")):
-        if request.args.get(arg):
-            value = datetime.fromisoformat(request.args[arg].replace("Z", "+00:00"))
+        if args.get(arg):
+            value = datetime.fromisoformat(args[arg].replace("Z", "+00:00"))
             if value.tzinfo is None:
                 abort(400, "Date filters need timezone offsets")
             column = func.coalesce(Incident.start_at, Incident.created_at)
             query = query.where(column >= value if operator == "ge" else column <= value)
-    page = max(1, int(request.args.get("page", 1)))
-    limit = min(100, max(1, int(request.args.get("limit", 25))))
+    page = max(1, int(args.get("page", 1)))
+    limit = min(100, max(1, int(args.get("limit", 25))))
+    total = db.scalar(select(func.count()).select_from(query.subquery()))
+    rows = db.scalars(
+        query.order_by(Incident.created_at.desc(), Incident.id).offset((page - 1) * limit).limit(limit)
+    )
+    return {"items": [serialize(row) for row in rows], "total": total, "page": page, "limit": limit}
+
+
+@bp.get("/api/v1/incidents")
+@authenticated
+def incidents():
     with sessions() as db:
-        total = db.scalar(select(func.count()).select_from(query.subquery()))
-        rows = db.scalars(
-            query.order_by(Incident.created_at.desc(), Incident.id).offset((page - 1) * limit).limit(limit)
-        )
-        return jsonify(items=[serialize(row) for row in rows], total=total, page=page, limit=limit)
+        return jsonify(incident_collection(db, request.args))
 
 
 @bp.get("/api/v1/incidents/<incident_id>")

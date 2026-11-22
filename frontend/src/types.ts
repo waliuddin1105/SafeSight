@@ -84,6 +84,12 @@ export interface ModelsResponse {
   items: Record<string, ModelStatus>;
   worker_alive: boolean;
 }
+export interface OverviewResponse {
+  sources: Source[];
+  locations: Location[];
+  models: ModelsResponse;
+  incidents: ListResponse<Incident>;
+}
 export interface ModelVersion {
   slug: Slug;
   run_id: string;
@@ -123,4 +129,18 @@ export interface JobFrame {
     scores: Record<string, number>;
   }[];
   unknown: Record<string, string>;
+}
+export interface JobMetrics {
+  available: boolean;
+  precision?: number | null;
+  recall?: number | null;
+  reason?: string;
+}
+export interface JobResults {
+  job: Job;
+  frames: JobFrame[];
+  next_after: number | null;
+  has_more: boolean;
+  incidents: Incident[];
+  metrics: JobMetrics;
 }
