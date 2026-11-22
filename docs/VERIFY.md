@@ -114,7 +114,7 @@ No training entrypoint or optimizer was executed in this pass.
 
 ## Verified
 
-- 26 Python tests pass, including read-only dataset checks, malformed labels/media,
+- 88 Python tests pass, including read-only dataset checks, malformed labels/media,
   provenance leakage, minimum calibration support, object-size AP, temporal gaps and
   N-of-M behavior, joint prediction replay, crop consistency, artifact replacement,
   checksum rejection and non-executable recovery serialization.
@@ -142,7 +142,7 @@ No training entrypoint or optimizer was executed in this pass.
   carry synthetic/FAIL cards and do not establish real safety metrics.
 - No real datasets exist in this checkout. Real accuracy, alert quality PASS, hidden
   cigarette recall and the joint fusion quality gate have not been measured.
-- CUDA, physical USB/RTSP cameras and real-time target-hardware throughput are unverified.
+- Physical USB/RTSP cameras and real-camera throughput remain unverified.
 - Docker is unavailable on this host. Image/Compose source contracts are checked; image
   build, container startup and restart/persistence need a Docker-capable host. CI includes
   an image build and non-training checks, but CI has not been run remotely in this session.
@@ -172,5 +172,14 @@ and one recovery snapshot commit together. A failed chunk commit restores the la
 snapshot and retries from the committed cursor up to three times. Clip encoding uses
 a single bounded background worker and retains pending recovery state until done.
 Focused worker/model tests, recording chunk integration, and browser incident/evidence
-recovery passed (16 tests); Ruff and the context graph passed. No training was run. Real-GPU throughput
-and hosted Supabase transaction latency remain unmeasured.
+recovery passed (16 tests); Ruff and the context graph passed. No training was run.
+
+On 2026-11-22, the installed fire/smoke evaluation artifact processed 24 blank 640x480
+frames in batches of eight on CUDA (`torch 2.7.1+cu126`) at 19.68 FPS. Sampled GPU
+compute utilization averaged 8%, peaked at 32%, and used at most 1629 MiB. This exceeds
+the configured 5 FPS sampling target for this synthetic input only; it does not measure
+camera decoding, evidence workloads, real scenes, alert quality or accuracy. Five warm
+`SELECT 1` calls to the configured hosted PostgreSQL connection averaged 295.1 ms
+(233.7-507.7 ms), supporting the decision to consolidate polling and chunk writes.
+One PostgreSQL advisory-lock connection-loss test is skipped when the disposable test
+database uses SQLite; the production-only ownership path remains covered on PostgreSQL.

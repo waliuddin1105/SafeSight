@@ -1,5 +1,8 @@
 """Supabase identity/session boundaries exercised with an explicit provider fake."""
 
+# The imported ``app`` pytest fixture intentionally shares its name with test parameters.
+# ruff: noqa: F811
+
 from datetime import timedelta
 
 from sqlalchemy import select
