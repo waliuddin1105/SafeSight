@@ -89,14 +89,13 @@ Each line in events/val.jsonl or events/test.jsonl describes one whole video, in
         0.1,
         0.8,
         0.9
-      ],
-      "hidden_cigarette": false
+      ]
     }
   ]
 }
 ```
 
-Subtypes: deep_bend, lying_on_floor. Tobacco smoke is boxed as smoke but is not hazardous_smoke truth. Mark hidden_cigarette=true for occluded smoking. Include idle phones, eating/drinking and face touching as negatives.
+Subtypes: deep_bend, lying_on_floor. The box identifies the affected person. Include upright, seated and legitimate crouching/kneeling work, partial occlusion and low-visibility poses as hard negatives or unknown intervals as appropriate.
 
 ## Counts and splits
 

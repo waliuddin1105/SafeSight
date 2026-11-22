@@ -36,7 +36,12 @@ def evaluate(config: dict) -> dict:
                 if not item["video"].startswith(f"videos/{partition}/"):
                     raise ValueError("Fusion media path must match its partition")
                 duration, _ = video_info(path)
-                validate_event_record(item, duration, ["smoking", "fire", "hazardous_smoke", "uncertain_smoke"])
+                validate_event_record(
+                    item,
+                    duration,
+                    ["smoking", "fire", "hazardous_smoke", "uncertain_smoke"],
+                    allow_hidden_cigarette=True,
+                )
                 digest = sha256(path)
                 if digest in media_hashes and media_hashes[digest] != partition:
                     raise ValueError("Fusion media content duplicated across partitions")

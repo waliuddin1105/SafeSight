@@ -5,7 +5,7 @@ import shutil
 
 import pytest
 
-from training.common.datasets import sha256, validate, valid_yolo_box
+from training.common.datasets import sha256, validate, validate_event_record, valid_yolo_box
 from training.common.fixtures import generate
 
 
@@ -57,6 +57,26 @@ def test_synthetic_requires_opt_in(data):
 def test_yolo_boundary_rounding_is_valid_but_real_overflow_is_not():
     assert valid_yolo_box(0.03320312, 0.34236111, 0.06640625, 0.13194444)
     assert not valid_yolo_box(0.9, 0.5, 0.5, 0.2)
+
+
+def test_hidden_cigarette_is_restricted_to_smoking_events():
+    record = {
+        "source_id": "source",
+        "group_id": "group",
+        "events": [
+            {
+                "subtype": "phone_usage",
+                "start": 1.0,
+                "end": 2.0,
+                "box": [0.1, 0.1, 0.5, 0.8],
+                "hidden_cigarette": False,
+            }
+        ],
+    }
+    with pytest.raises(ValueError, match="only for smoking"):
+        validate_event_record(record, 3.0, ["phone_usage"])
+    record["events"][0]["subtype"] = "smoking"
+    validate_event_record(record, 3.0, ["smoking"], allow_hidden_cigarette=True)
 
 
 def test_graph_rejects_orphan(tmp_path):

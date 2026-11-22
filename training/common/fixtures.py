@@ -21,7 +21,11 @@ def generate(slug: str, root: Path | None = None) -> Path:
         raise ValueError("Synthetic fixtures must be inside tests/fixtures")
     marker = base / "fixture.json"
     if marker.exists():
-        return base
+        try:
+            if json.loads(marker.read_text(encoding="utf-8")).get("schema_version") == 2:
+                return base
+        except (OSError, ValueError, TypeError):
+            pass
     base.mkdir(parents=True, exist_ok=True)
     rng = np.random.default_rng(42 + list(CLASSES).index(slug))
     records = []
@@ -140,7 +144,7 @@ def generate(slug: str, root: Path | None = None) -> Path:
                                 "end": 1.8,
                                 "track_id": "person1",
                                 "box": [0.1, 0.1, 0.9, 0.9],
-                                "hidden_cigarette": True,
+                                **({"hidden_cigarette": True} if slug == "cigarette_smoking" else {}),
                             }
                         ]
                         if index == 0
@@ -166,6 +170,7 @@ def generate(slug: str, root: Path | None = None) -> Path:
             encoding="utf-8",
         )
     marker.write_text(
-        json.dumps({"synthetic": True, "seed": 42, "purpose": "software execution only"}), encoding="utf-8"
+        json.dumps({"schema_version": 2, "synthetic": True, "seed": 42, "purpose": "software execution only"}),
+        encoding="utf-8",
     )
     return base

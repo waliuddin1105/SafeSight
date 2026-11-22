@@ -84,14 +84,13 @@ Each line in events/val.jsonl or events/test.jsonl describes one whole video, in
         0.1,
         0.8,
         0.9
-      ],
-      "hidden_cigarette": false
+      ]
     }
   ]
 }
 ```
 
-Subtypes: phone_usage. Tobacco smoke is boxed as smoke but is not hazardous_smoke truth. Mark hidden_cigarette=true for occluded smoking. Include idle phones, eating/drinking and face touching as negatives.
+Subtype: phone_usage. The box identifies the person actively using the phone. Include phones being carried, stored or resting nearby, plus eating, drinking and face touching, as hard negatives.
 
 ## Counts and splits
 

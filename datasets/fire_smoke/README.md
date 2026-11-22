@@ -81,20 +81,19 @@ Each line in events/val.jsonl or events/test.jsonl describes one whole video, in
       "subtype": "fire",
       "start": 2.0,
       "end": 6.0,
-      "track_id": "person1",
+      "track_id": "scene",
       "box": [
         0.1,
         0.1,
         0.8,
         0.9
-      ],
-      "hidden_cigarette": false
+      ]
     }
   ]
 }
 ```
 
-Subtypes: fire, hazardous_smoke, uncertain_smoke. Tobacco smoke is boxed as smoke but is not hazardous_smoke truth. Mark hidden_cigarette=true for occluded smoking. Include idle phones, eating/drinking and face touching as negatives.
+Subtypes: fire, hazardous_smoke, uncertain_smoke. The box identifies the scene hazard rather than a person. Tobacco smoke is not hazardous-smoke truth. Include tobacco smoke, steam, dust, welding, clouds and reflections as hard negatives or uncertain-source events according to the visible evidence.
 
 ## Counts and splits
 

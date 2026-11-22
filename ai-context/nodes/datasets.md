@@ -21,3 +21,8 @@ Implemented contracts, read-only validation, synthetic fixtures and 11 regressio
 Flat inputs now omit split. Validation/training stage reproducible group-based partitions under artifacts; see docs/AUTOMATIC_SPLITS.md and ADR 0005. Legacy layouts remain accepted.
 
 Image training and frozen qualification are separate commands; see docs/IMPROVEMENTS.md and ADR 0008.
+
+Event metadata is task-specific. `hidden_cigarette` is accepted only for cigarette
+smoking annotations and mixed smoking/fire fusion evaluation. Body-state boxes identify
+the person posture, phone-usage boxes identify the active user, and fire/smoke boxes
+identify the scene hazard.

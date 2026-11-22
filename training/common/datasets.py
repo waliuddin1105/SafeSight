@@ -59,7 +59,9 @@ def valid_yolo_box(x: float, y: float, width: float, height: float, tolerance: f
     )
 
 
-def validate_event_record(item: dict, duration: float, allowed: list[str]) -> None:
+def validate_event_record(
+    item: dict, duration: float, allowed: list[str], allow_hidden_cigarette: bool = False
+) -> None:
     """Require complete event timing, actor/hazard localization and visibility labels."""
     if not item.get("source_id") or not item.get("group_id") or not isinstance(item.get("events"), list):
         raise ValueError("Event video requires source_id, group_id and an events list")
@@ -70,8 +72,11 @@ def validate_event_record(item: dict, duration: float, allowed: list[str]) -> No
             raise ValueError("Unknown event subtype")
         if not valid_box(event["box"]):
             raise ValueError("Event actor/hazard box must be normalized xyxy")
-        if not isinstance(event.get("hidden_cigarette", False), bool):
-            raise ValueError("hidden_cigarette must be boolean")
+        if "hidden_cigarette" in event:
+            if not allow_hidden_cigarette:
+                raise ValueError("hidden_cigarette is valid only for smoking event annotations")
+            if not isinstance(event["hidden_cigarette"], bool):
+                raise ValueError("hidden_cigarette must be boolean")
 
 
 def video_info(path: Path) -> tuple[float, int]:
@@ -315,7 +320,9 @@ def validate(root: Path, slug: str, allow_synthetic: bool = False, *, qualificat
                     if previous and previous[0] != split:
                         raise ValueError(f"Evaluation video is duplicated across splits: {previous[1]}")
                     content_splits[content_hash] = (split, item["video"])
-                    validate_event_record(item, duration, alert_classes(slug))
+                    validate_event_record(
+                        item, duration, alert_classes(slug), allow_hidden_cigarette=slug == "cigarette_smoking"
+                    )
                     if item["group_id"] in group_splits and group_splits[item["group_id"]] != {split}:
                         raise ValueError("Evaluation group overlaps another split")
                     if item["source_id"] in sources and sources[item["source_id"]] != {split}:
