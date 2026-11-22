@@ -3,6 +3,8 @@
 from contextlib import contextmanager
 from datetime import timedelta
 import hashlib
+from collections import deque
+import logging
 import time
 
 from sqlalchemy import or_, select
@@ -10,7 +12,12 @@ from sqlalchemy import or_, select
 from safesight.config import within
 from safesight.ingestion.video import frames
 from safesight.model_loaders.registry import Registry
-from safesight.storage.schema import Job, Source, ModelVersion, utcnow
+from safesight.storage.schema import Job, Source, ModelVersion, RuntimeSnapshot, utcnow
+from safesight.inference.state import loads
+
+
+class ChunkCommitError(RuntimeError):
+    """Committed state was restored and the recording may be replayed."""
 
 
 @contextmanager
@@ -111,31 +118,122 @@ def process_job(worker) -> bool:
             source.config = job.snapshot.get("source_config", source.config)
             if job.id not in worker.video_jobs:
                 worker.video_jobs[job.id] = iter(frames(within(worker.media, job.path), job.snapshot["sample_fps"]))
-            timestamp, rgb = next(worker.video_jobs[job.id])
-            while timestamp <= job.cursor:
-                timestamp, rgb = next(worker.video_jobs[job.id])
-            worker.process(
-                source,
-                rgb,
-                timestamp,
-                job.captured_at + timedelta(seconds=timestamp) if job.captured_at else None,
-                job.id,
-            )
-        worker.assert_owner()
-        with worker.sessions.begin() as db:
-            current = db.get(Job, job.id)
-            current.cursor = max(current.cursor, timestamp)
-            current.processed_frames += 1
-            current.processing_seconds += time.perf_counter() - started
-            if current.cancel_requested:
-                current.state = "cancelled"
+            chunk = []
+            iterator = worker.video_jobs[job.id]
+            while len(chunk) < worker.config.get("upload_batch_size", 8):
+                frame = next(iterator, None)
+                if frame is None:
+                    break
+                if frame[0] > job.cursor:
+                    chunk.append(frame)
+            if not chunk:
+                raise StopIteration
+            prepared = [{"people": [], "predictions": {}} for _ in chunk]
+            images = [rgb for _, rgb in chunk]
+            timestamps = [timestamp for timestamp, _ in chunk]
+            from safesight.worker.__main__ import needs_pose_context
+
+            if worker.registry.pose and needs_pose_context(source.enabled_models, worker.registry.adapters):
+                for index, rgb in enumerate(images):
+                    prepared[index]["people"] = worker.registry.pose.extract(rgb)
+            for slug in source.enabled_models:
+                adapter = worker.registry.adapters.get(slug)
+                if adapter is None:
+                    continue
+                try:
+                    if hasattr(adapter, "predict_batch"):
+                        try:
+                            predictions = adapter.predict_batch(images, timestamps)
+                        except RuntimeError as error:
+                            if "out of memory" not in str(error).lower() or len(chunk) == 1:
+                                raise
+                            import torch
+
+                            if torch.cuda.is_available():
+                                torch.cuda.empty_cache()
+                            logging.getLogger(__name__).warning(
+                                "Batch inference exhausted GPU memory for %s; retrying one frame at a time", slug
+                            )
+                            predictions = [adapter.predict(rgb, timestamp) for timestamp, rgb in chunk]
+                    else:
+                        predictions = []
+                        for (timestamp, rgb), context in zip(chunk, prepared):
+                            if hasattr(adapter, "buffer"):
+                                key = f"{source.id}:{source.generation}:{job.id}"
+                                adapter.buffer = worker.adapter_buffers.setdefault(
+                                    (key, slug), deque(maxlen=adapter.card.sequence_length)
+                                )
+                                adapter.source_config = source.config
+                            if slug == "body_state":
+                                predictions.append(adapter.predict(rgb, timestamp, people=context["people"]))
+                            else:
+                                predictions.append(adapter.predict(rgb, timestamp))
+                    if len(predictions) != len(chunk):
+                        raise ValueError(f"{slug} returned an incorrect batch length")
+                    for record, prediction in zip(prepared, predictions):
+                        record["predictions"][slug] = prediction
+                except (RuntimeError, ValueError) as error:
+                    logging.getLogger(__name__).exception("Inference failed for %s", slug)
+                    worker.registry.status[slug] = {"ready": False, "reason": str(error)}
+            worker.assert_owner()
+            cancelled = False
+            try:
+                with worker.sessions.begin() as db:
+                    current = db.get(Job, job.id)
+                    if current.cancel_requested:
+                        current.state = "cancelled"
+                        cancelled = True
+                    else:
+                        for (timestamp, rgb), context in zip(chunk, prepared):
+                            worker.process(
+                                source, rgb, timestamp,
+                                job.captured_at + timedelta(seconds=timestamp) if job.captured_at else None,
+                                job.id, db=db, prepared=context,
+                            )
+                        key = f"{source.id}:{source.generation}:{job.id}"
+                        worker.checkpoint(db, key)
+                        current.cursor = max(current.cursor, chunk[-1][0])
+                        current.processed_frames += len(chunk)
+                        current.processing_seconds += time.perf_counter() - started
+                        current.lease_until = utcnow() + timedelta(seconds=worker.config["worker_lease_seconds"])
+            except Exception as failure:
+                key = f"{source.id}:{source.generation}:{job.id}"
+                with worker.sessions() as db:
+                    snapshot = db.get(RuntimeSnapshot, key)
+                    state = loads(snapshot.payload, worker.get_blob) if snapshot else None
+                if state:
+                    worker.engines[key], worker.buffers[key] = state["engine"], state["buffer"]
+                else:
+                    worker.engines.pop(key, None)
+                    worker.buffers.pop(key, None)
+                worker.adapter_buffers = {k: v for k, v in worker.adapter_buffers.items() if k[0] != key}
+                worker.pending = {k: v for k, v in worker.pending.items() if v[0] != key}
+                if state:
+                    worker.adapter_buffers.update(state["adapters"])
+                    worker.pending.update(state["pending"])
+                for slug in source.enabled_models:
+                    adapter = worker.registry.adapters.get(slug)
+                    if adapter is not None and hasattr(adapter, "buffer"):
+                        adapter.buffer = worker.adapter_buffers.get(
+                            (key, slug), deque(maxlen=adapter.card.sequence_length)
+                        )
+                        if hasattr(adapter, "frames_seen"):
+                            adapter.frames_seen = len(adapter.buffer)
+                worker.video_jobs.pop(job.id, None)
+                raise ChunkCommitError("Chunk transaction failed; replaying from committed cursor") from failure
+            if not cancelled:
+                worker.flush_clips(chunk[-1][0], key)
+            worker.job_retries.pop(job.id, None)
         return True
     except StopIteration:
         state, error = "completed", None
+    except ChunkCommitError as failure:
+        retries = worker.job_retries.get(job.id, 0) + 1
+        worker.job_retries[job.id] = retries
+        state = "paused" if retries < 3 else "failed"
+        error = str(failure)
     except Exception as failure:
         state, error = "failed", f"{type(failure).__name__}: recording processing failed; inspect worker logs"
-        import logging
-
         logging.getLogger(__name__).exception("Recording job failed")
     worker.assert_owner()
     with worker.sessions.begin() as db:

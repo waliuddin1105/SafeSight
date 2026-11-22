@@ -29,3 +29,15 @@ Per-frame pose extraction is conditional on a selected, available pose-dependent
 (`body_state`, `phone_usage`, `cigarette_smoking`, or `entrance_guard`). Fire/smoke-only
 jobs skip MediaPipe; fire detection, smoke spread, smoothing, and uncertainty remain active.
 Qualified smoking/fire fusion still receives pose because selecting smoking requires it.
+
+The worker reuses a single pose extraction for body classification and person context.
+Recovery state is committed once with each processed frame; clip completion does not
+repeat that checkpoint. Heartbeats are limited to five-second intervals. An active
+browser source without a pending frame yields the worker to queued upload jobs.
+Clip decoding and MP4 encoding occur outside database transactions; the evidence
+state is committed afterward, including encoding failures.
+Uploaded recordings decode at most eight sampled frames per chunk. Detector batches
+are evaluated before a single transaction commits the ordered frame results, job
+cursor, incident changes and recovery snapshot. A failed commit restores the last
+committed snapshot. A single evidence thread encodes clips; pending evidence retains
+its snapshot until completion and remains recoverable after restart.

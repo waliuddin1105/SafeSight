@@ -59,8 +59,11 @@ def settings() -> dict[str, Any]:
         "max_frame_pixels",
         "pending_frame_seconds",
         "worker_lease_seconds",
+        "upload_batch_size",
         "decode_timeout_seconds",
     ):
         if isinstance(value[name], bool) or value[name] <= 0:
             raise ValueError(f"{name} must be positive")
+    if not isinstance(value["upload_batch_size"], int) or value["upload_batch_size"] > 32:
+        raise ValueError("upload_batch_size must be an integer from 1 to 32")
     return value

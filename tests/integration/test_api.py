@@ -9,9 +9,8 @@ from sqlalchemy import select
 from tests.auth_fixture import FakeAuth, SUBJECT, EMAIL
 
 from safesight.backend.app import create_app
-from safesight.config import ROOT
 from safesight.contracts import Alert, Candidate
-from safesight.storage.schema import Base, User, Incident, Evidence
+from safesight.storage.schema import Base, User, Incident, RuntimeSnapshot, Source
 from safesight.worker.__main__ import Worker
 from training.common.fixtures import generate
 from tools.generate_inference_fixtures import generate as inference_fixtures
@@ -93,6 +92,11 @@ def test_auth_capture_incident_evidence_and_review(app, monkeypatch):
     worker = Worker(app.extensions["safesight"])
     try:
         assert worker.tick()
+        assert worker.pending
+        with worker.sessions() as db:
+            assert db.get(Source, source["id"]).health["status"] == "processing"
+            assert db.scalars(select(Incident)).first() is not None
+            assert db.scalars(select(RuntimeSnapshot)).first() is not None
     finally:
         worker.close()
     worker = Worker(app.extensions["safesight"])

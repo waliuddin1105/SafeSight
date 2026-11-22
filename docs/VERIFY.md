@@ -163,3 +163,14 @@ commit engine/sequence state and references to immutable media blocks under MEDI
 Blocks are checksum verified and obsolete windows are collected. Pending evidence
 survives a matching worker restart. Changed model/policy context or missing/corrupt
 recovery media is explicitly rejected rather than used to fabricate evidence.
+
+## Uploaded-video batching (2026-11-22)
+
+An eight-frame bounded upload chunk now batches YOLO predictions, including smoking
+person crops, before ordered temporal processing. Frame results, cursor, incidents,
+and one recovery snapshot commit together. A failed chunk commit restores the last
+snapshot and retries from the committed cursor up to three times. Clip encoding uses
+a single bounded background worker and retains pending recovery state until done.
+Focused worker/model tests, recording chunk integration, and browser incident/evidence
+recovery passed (16 tests); Ruff and the context graph passed. No training was run. Real-GPU throughput
+and hosted Supabase transaction latency remain unmeasured.

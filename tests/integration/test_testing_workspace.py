@@ -204,6 +204,22 @@ def test_still_image_runs_through_pinned_worker_job(app):
     assert len(predictions) == 1
 
 
+def test_recording_commits_multiple_frames_per_worker_tick(app):
+    client = app.test_client()
+    login = signin(client)
+    job, _ = submit(app, client, login.json["csrf_token"])
+    worker = Worker(app.extensions["safesight"])
+    try:
+        assert worker.tick_job()
+        with app.extensions["db_sessions"]() as db:
+            current = db.get(Job, job["id"])
+            assert 1 < current.processed_frames <= 8
+            assert current.cursor > 0
+        assert len(client.get(f"/api/v1/jobs/{job['id']}/predictions").json["items"]) > 1
+    finally:
+        worker.close()
+
+
 def test_webcam_start_can_select_models_for_that_session(app):
     client = app.test_client()
     login = signin(client)

@@ -6,7 +6,7 @@ import json
 import torch
 
 from safesight.contracts import CLASSES
-from safesight.model_loaders.registry import Registry
+from safesight.model_loaders.registry import Registry, YoloAdapter, ModelCard
 
 
 class FixedClassifier(torch.nn.Module):
@@ -123,3 +123,46 @@ def test_missing_selected_card_and_artifact_do_not_expose_device_paths(tmp_path)
         "Model artifact referenced by the card is not installed on this device"
     )
     registry.close()
+
+
+def test_smoking_batch_maps_crop_boxes_to_each_original_frame():
+    import numpy as np
+
+    class Values:
+        def __init__(self, values):
+            self.values = values
+
+        def cpu(self):
+            return self
+
+        def tolist(self):
+            return self.values
+
+    class Result:
+        def __init__(self, boxes, scores, classes):
+            self.boxes = type("Boxes", (), {
+                "xyxyn": Values(boxes), "conf": Values(scores), "cls": Values(classes)
+            })()
+
+    class Detector:
+        def __init__(self):
+            self.calls = []
+
+        def predict(self, images, **kwargs):
+            self.calls.append(len(images))
+            if len(self.calls) == 1:
+                return [Result([[0.1, 0.1, 0.5, 0.9]], [0.9], [0]) for _ in images]
+            return [Result([[0.5, 0.5, 0.6, 0.6]], [0.8], [1]) for _ in images]
+
+    adapter = YoloAdapter.__new__(YoloAdapter)
+    adapter.card = ModelCard(
+        slug="cigarette_smoking", loader="ultralytics", architecture="fixture",
+        classes=CLASSES["cigarette_smoking"], artifact="fixture.pt", sha256="0" * 64,
+        run_id="fixture", input_size=64, thresholds={}, quality={"status": "FAIL"},
+    )
+    adapter.model, adapter.device = Detector(), "cpu"
+    adapter.nms_iou, adapter.containment_threshold = 0.45, 0.8
+    predictions = adapter.predict_batch([np.zeros((100, 100, 3), dtype=np.uint8)] * 2, [0.0, 0.2])
+    assert adapter.model.calls == [2, 2]
+    assert [prediction.timestamp for prediction in predictions] == [0.0, 0.2]
+    assert all(any(d.label == "cigarette" and d.box[0] > 0.2 for d in p.detections) for p in predictions)

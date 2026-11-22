@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from collections import deque
+from concurrent.futures import ThreadPoolExecutor
+from contextlib import nullcontext
 from datetime import timedelta, timezone
 import hashlib
 import io
@@ -101,9 +103,13 @@ class Worker:
         ).hexdigest()
         self.media = self.config["media_root"]
         self.last_recovery_gc = 0.0
+        self.last_heartbeat = 0.0
         self.engines, self.buffers, self.captures, self.pending = {}, {}, {}, {}
+        self.evidence_pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="safesight-evidence")
+        self.evidence_tasks = {}
         self.worker_id = identifier()
         self.video_jobs = {}
+        self.job_retries = {}
         self.adapter_buffers = {}
         self.model_ids = {}
         self.job_contexts = {}
@@ -219,7 +225,8 @@ class Worker:
             row.updated_at = utcnow()
 
     def process(
-        self, source: Source, rgb: np.ndarray, timestamp: float, captured_at=None, session_key: str = ""
+        self, source: Source, rgb: np.ndarray, timestamp: float, captured_at=None, session_key: str = "",
+        *, db=None, prepared: dict | None = None, packet_id: str | None = None,
     ) -> None:
         key = f"{source.id}:{source.generation}:{session_key}"
         if key not in self.engines:
@@ -227,8 +234,8 @@ class Worker:
             if session_key and "location_policies" in source.config:
                 policies = source.config["location_policies"]
             else:
-                with self.sessions() as db:
-                    location = db.get(Location, source.location_id)
+                with self.sessions() as location_db:
+                    location = location_db.get(Location, source.location_id)
                     policies = location.policies if location else {}
             if policies.get("body_state"):
                 config["body_state"] = {**config["body_state"], **policies["body_state"]}
@@ -243,6 +250,11 @@ class Worker:
         Image.fromarray(rgb).save(output, format="JPEG", quality=85)
         buffer.append((timestamp, output.getvalue()))
         predictions = []
+        people = prepared["people"] if prepared is not None else (
+            self.registry.pose.extract(rgb)
+            if self.registry.pose and needs_pose_context(source.enabled_models, self.registry.adapters)
+            else []
+        )
         for slug in source.enabled_models:
             adapter = self.registry.adapters.get(slug)
             if adapter:
@@ -252,19 +264,21 @@ class Worker:
                     )
                     adapter.source_config = source.config
                 try:
-                    predictions.append(adapter.predict(rgb, timestamp))
+                    if prepared is not None:
+                        if slug in prepared["predictions"]:
+                            predictions.append(prepared["predictions"][slug])
+                    elif slug == "body_state":
+                        predictions.append(adapter.predict(rgb, timestamp, people=people))
+                    else:
+                        predictions.append(adapter.predict(rgb, timestamp))
                 except (RuntimeError, ValueError) as error:
                     LOG.exception("Inference failed for %s", slug)
                     self.registry.status[slug] = {"ready": False, "reason": str(error)}
-        people = (
-            self.registry.pose.extract(rgb)
-            if self.registry.pose
-            and needs_pose_context(source.enabled_models, self.registry.adapters)
-            else []
-        )
         alerts = self.engines[key].process(predictions, people, timestamp)
-        self.assert_owner()
-        with self.sessions.begin() as db:
+        if db is None:
+            self.assert_owner()
+        with (self.sessions.begin() if db is None else nullcontext(db)) as transaction:
+            db = transaction
             if session_key:
                 existing_frame = db.scalar(
                     select(JobFrame).where(JobFrame.job_id == session_key, JobFrame.timestamp == timestamp)
@@ -355,30 +369,58 @@ class Worker:
                     - (20 if candidate.slug == "entrance_guard" else self.config["evidence_before_seconds"]),
                     timestamp + self.config["evidence_after_seconds"],
                 )
-            self.checkpoint(db, key)
-        self.flush_clips(timestamp, key)
+            if not session_key or prepared is None:
+                self.checkpoint(db, key)
+            if packet_id is not None:
+                consumed = db.get(FramePacket, packet_id)
+                if consumed:
+                    db.delete(consumed)
+        if prepared is None:
+            self.flush_clips(timestamp, key)
 
     def flush_clips(self, timestamp: float, key: str, force: bool = False) -> None:
+        from safesight.model_loaders.registry import file_sha256
+
+        def encode(relative, retained):
+            selected = [np.asarray(Image.open(io.BytesIO(raw)).convert("RGB")) for _, raw in retained]
+            path = within(self.media, relative)
+            write_video(path, selected, self.config["sample_fps"], timestamps=[t for t, _ in retained])
+            return file_sha256(path)
+
         for evidence_id, (source_key, start, end) in list(self.pending.items()):
             if source_key != key or (not force and timestamp < end):
                 continue
+            if evidence_id in self.evidence_tasks:
+                continue
+            with self.sessions() as db:
+                row = db.get(Evidence, evidence_id)
+                incident_id = row.incident_id if row else None
+            if incident_id is None:
+                del self.pending[evidence_id]
+                continue
+            relative = f"evidence/{incident_id}/clip.mp4"
+            retained = [(t, raw) for t, raw in self.buffers[key] if start <= t <= end]
+            self.evidence_tasks[evidence_id] = (relative, self.evidence_pool.submit(encode, relative, retained))
+        self.finish_clips()
+
+    def finish_clips(self) -> None:
+        for evidence_id, (relative, task) in list(self.evidence_tasks.items()):
+            if not task.done():
+                continue
+            checksum, failure = None, None
+            try:
+                checksum = task.result()
+            except Exception as error:
+                LOG.exception("Evidence encoding failed")
+                failure = str(error)
             with self.sessions.begin() as db:
                 row = db.get(Evidence, evidence_id)
-                try:
-                    retained = [(t, raw) for t, raw in self.buffers[key] if start <= t <= end]
-                    selected = [np.asarray(Image.open(io.BytesIO(raw)).convert("RGB")) for _, raw in retained]
-                    relative = f"evidence/{row.incident_id}/clip.mp4"
-                    path = within(self.media, relative)
-                    write_video(path, selected, self.config["sample_fps"], timestamps=[t for t, _ in retained])
-                    row.path, row.state = relative, "ready"
-                    row.checksum = hashlib.sha256(path.read_bytes()).hexdigest()
-                except Exception as error:
-                    LOG.exception("Evidence encoding failed")
-                    row.state, row.error = "failed", str(error)
-            del self.pending[evidence_id]
-        if key in self.engines:
-            with self.sessions.begin() as db:
-                self.checkpoint(db, key)
+                if row:
+                    row.path = relative if failure is None else None
+                    row.state = "ready" if failure is None else "failed"
+                    row.checksum, row.error = checksum, failure
+            self.pending.pop(evidence_id, None)
+            del self.evidence_tasks[evidence_id]
 
     def assert_owner(self) -> None:
         """A lost dedicated advisory-lock connection must stop all writes."""
@@ -393,6 +435,7 @@ class Worker:
     def tick(self) -> bool:
         """Claim briefly, decode/infer outside the transaction, then commit progress."""
         self.assert_owner()
+        self.finish_clips()
         self.release_finished_sessions()
         if time.monotonic() - self.last_recovery_gc > 30:
             self.collect_recovery_blobs()
@@ -401,7 +444,9 @@ class Worker:
 
                 db.execute(delete(AuthSession).where(AuthSession.expires_at < utcnow()))
                 db.execute(delete(LoginAttempt).where(LoginAttempt.expires_at < utcnow()))
-        self.heartbeat()
+        if time.monotonic() - self.last_heartbeat >= 5:
+            self.heartbeat()
+            self.last_heartbeat = time.monotonic()
         packet = None
         with self.sessions() as db:
             source = db.scalar(
@@ -420,14 +465,14 @@ class Worker:
                     try:
                         with Image.open(path) as image:
                             rgb = np.asarray(image.convert("RGB"))
-                        self.process(source, rgb, packet.timestamp, packet.captured_at)
+                        self.process(source, rgb, packet.timestamp, packet.captured_at, packet_id=packet.id)
                     except (OSError, ValueError) as error:
                         self.fail_source(source.id, "Frame decoding failed")
                         LOG.warning("Frame decoding failed: %s", type(error).__name__)
-                    with self.sessions.begin() as db:
-                        consumed = db.get(FramePacket, packet.id)
-                        if consumed:
-                            db.delete(consumed)
+                        with self.sessions.begin() as db:
+                            consumed = db.get(FramePacket, packet.id)
+                            if consumed:
+                                db.delete(consumed)
                     path.unlink(missing_ok=True)
                     return True
                 if source.last_frame_at and utcnow() - source.last_frame_at.replace(tzinfo=timezone.utc) > timedelta(
@@ -435,7 +480,7 @@ class Worker:
                 ):
                     self.fail_source(source.id, "disconnected")
                 else:
-                    return False
+                    return self.tick_job()
             else:
                 if source.id not in self.captures:
                     from safesight.ingestion.capture import CaptureReader
@@ -487,6 +532,8 @@ class Worker:
             if not finished:
                 continue
             self.flush_clips(self.buffers[key][-1][0] if self.buffers[key] else 0, key, force=True)
+            if any(item[0] == key for item in self.pending.values()):
+                continue
             with self.sessions.begin() as db:
                 snapshot = db.get(RuntimeSnapshot, key)
                 if snapshot:
@@ -504,6 +551,8 @@ class Worker:
                 capture.release()
 
     def close(self) -> None:
+        self.evidence_pool.shutdown(wait=True)
+        self.finish_clips()
         for iterator in self.video_jobs.values():
             if hasattr(iterator, "close"):
                 iterator.close()

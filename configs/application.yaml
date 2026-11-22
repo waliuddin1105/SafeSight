@@ -7,6 +7,7 @@ max_frame_pixels: 2073600
 pending_frame_seconds: 2
 source_timeout_seconds: 10
 worker_lease_seconds: 30
+upload_batch_size: 8
 evidence_before_seconds: 5
 evidence_after_seconds: 5
 inference_config: configs/inference.yaml
