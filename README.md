@@ -60,6 +60,10 @@ downloads with `python tools/prepare_datasets.py all --plan`. See
 and readiness statuses. Current public sources still need annotation/provenance work;
 download completion does not imply that the strict training dataset contract is met.
 
+For the audited multi-source fire/smoke retraining corpus, see
+[`docs/FIRE_SMOKE_CURATION.md`](docs/FIRE_SMOKE_CURATION.md). Preparation is resumable,
+quarantines suspicious annotations, and never starts training.
+
 Read datasets/SLUG/README.md before collecting data. Supply images/clips, annotations,
 manifest provenance exactly as documented. Four use cases train on images; guard
 requires ordered clips. Event videos are needed only for separate alert qualification.

@@ -160,6 +160,17 @@
       "path": "decisions/0013-immutable-model-qualification.md"
     },
     {
+      "id": "adr-0014",
+      "type": "decision",
+      "status": "accepted",
+      "links": [
+        "dataset_fire_smoke",
+        "fire_smoke",
+        "quality"
+      ],
+      "path": "decisions/0014-curated-fire-smoke-corpus.md"
+    },
+    {
       "id": "index",
       "type": "index",
       "status": "implemented",
@@ -325,7 +336,8 @@
       "status": "implemented",
       "links": [
         "datasets",
-        "fire_smoke"
+        "fire_smoke",
+        "adr-0014"
       ],
       "path": "nodes/dataset_fire_smoke.md"
     },
@@ -822,6 +834,18 @@
       "to": "adr-0012"
     },
     {
+      "from": "adr-0014",
+      "to": "dataset_fire_smoke"
+    },
+    {
+      "from": "adr-0014",
+      "to": "fire_smoke"
+    },
+    {
+      "from": "adr-0014",
+      "to": "quality"
+    },
+    {
       "from": "index",
       "to": "architecture"
     },
@@ -1084,6 +1108,10 @@
     {
       "from": "dataset_fire_smoke",
       "to": "fire_smoke"
+    },
+    {
+      "from": "dataset_fire_smoke",
+      "to": "adr-0014"
     },
     {
       "from": "dataset_phone_usage",

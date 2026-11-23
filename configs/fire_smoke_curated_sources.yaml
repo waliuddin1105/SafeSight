@@ -1,0 +1,70 @@
+schema_version: 1
+output: datasets/fire_smoke_curated
+cache: datasets/_downloads/fire_smoke_curated
+workspace: artifacts/fire-smoke-curation
+minimum_free_gb: 30
+classes: [smoke, fire]
+sources:
+  firesmoke_part1:
+    priority: 10
+    provider: roboflow
+    project: firesmokedataset
+    version: 2
+    expected_images: 21118
+    license: CC-BY-4.0
+    url: https://universe.roboflow.com/catargiuconstantin/firesmokedataset/dataset/2
+    class_aliases: {smoke: smoke, fire: fire, other: other}
+  firesmoke_part2:
+    priority: 20
+    provider: roboflow
+    project: firesmokenewdataset
+    version: 1
+    expected_images: 6176
+    license: CC-BY-4.0
+    url: https://universe.roboflow.com/catargiuconstantin2/firesmokenewdataset/dataset/1
+    class_aliases: {smoke: smoke, fire: fire, other: other}
+  industrial:
+    priority: 30
+    provider: roboflow
+    project: fire-and-smoke-industrial
+    version: 10
+    expected_images: 62314
+    license: CC-BY-4.0
+    url: https://universe.roboflow.com/firesmokehuman/fire-and-smoke-industrial
+    class_aliases: {smoke: smoke, fire: fire}
+  fasdd_cv:
+    priority: 40
+    provider: roboflow
+    project: fasdd_cv_fire_smoke_detection
+    version: 4
+    expected_images: 94600
+    license: CC-BY-4.0
+    url: https://universe.roboflow.com/pantauai/fasdd_cv_fire_smoke_detection/dataset/4
+    class_aliases: {smoke: smoke, fire: fire}
+  very_fire_smoke:
+    priority: 50
+    provider: roboflow
+    project: veryfiresmokedetection
+    version: 2
+    expected_images: 3417
+    license: CC-BY-4.0
+    url: https://universe.roboflow.com/agostino-abbatecola-52ty4/veryfiresmokedetection
+    class_aliases: {smoke: smoke, fire: fire}
+  fire_detection:
+    priority: 60
+    provider: roboflow
+    project: fire_detection-uhbdr
+    version: 2
+    expected_images: 54883
+    license: CC-BY-4.0
+    url: https://universe.roboflow.com/firedetection-sserj/fire_detection-uhbdr/dataset/2
+    class_aliases: {smoke: smoke, fire: fire}
+replay:
+  source: datasets/fire_smoke
+  maximum_images: 4000
+  publisher: dfire_replay
+target_review:
+  source: artifacts/media/uploads
+  maximum_frames: 500
+  minimum_interval_seconds: 2.0
+  perceptual_distance: 6

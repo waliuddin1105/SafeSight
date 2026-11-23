@@ -2,7 +2,7 @@
 id: dataset_fire_smoke
 type: dataset
 status: implemented
-links: [datasets, fire_smoke]
+links: [datasets, fire_smoke, adr-0014]
 ---
 # fire_smoke collection contract
 
@@ -22,6 +22,13 @@ retained. D-Fire is conservatively grouped by its AoF, WEB and PublicDataset fam
 Downloads are resumable; the manifest is published only after the corpus is complete.
 When reconstructing YOLO box edges, validation allows `1e-6` of decimal serialization
 tolerance at image boundaries. Materially out-of-frame boxes still fail validation.
+
+`tools/prepare_fire_smoke_curated.py` builds the next training corpus from pinned, unaugmented
+public exports. It maps smoke=0 and fire=1, turns publisher `other` examples into negative
+context, confirms perceptual duplicate candidates with pixel similarity, quarantines suspect
+annotations and retains provenance. A balanced D-Fire replay subset limits forgetting. Uploaded
+video frames and current-model prelabels remain outside training until human review. The generated
+folder is `datasets/fire_smoke_curated`; details are in `docs/FIRE_SMOKE_CURATION.md`.
 
 ## Gotchas
 
