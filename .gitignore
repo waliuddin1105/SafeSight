@@ -33,3 +33,4 @@ models/**
 !models/**/versions/**/*.ts
 *.egg-info/
 .coverage
+.agents*/
