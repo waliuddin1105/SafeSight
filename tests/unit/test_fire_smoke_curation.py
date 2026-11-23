@@ -11,6 +11,7 @@ from tools.prepare_fire_smoke_curated import (
     audit_boxes,
     dhash,
     parse_labels,
+    roboflow_export_endpoint,
     safe_extract,
     scene_group,
     visually_near,
@@ -59,3 +60,11 @@ def test_zip_path_traversal_is_rejected(tmp_path: Path):
         output.writestr("../escape.txt", "bad")
     with pytest.raises(ValueError, match="Unsafe"):
         safe_extract(archive, tmp_path / "extract")
+
+
+def test_roboflow_endpoint_uses_workspace_without_credentials():
+    endpoint = roboflow_export_endpoint(
+        {"workspace": "example-workspace", "project": "example-project", "version": 3}
+    )
+    assert endpoint == "https://api.roboflow.com/example-workspace/example-project/3/yolov8"
+    assert "api_key" not in endpoint

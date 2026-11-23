@@ -8,6 +8,7 @@ sources:
   firesmoke_part1:
     priority: 10
     provider: roboflow
+    workspace: catargiuconstantin
     project: firesmokedataset
     version: 2
     expected_images: 21118
@@ -17,6 +18,7 @@ sources:
   firesmoke_part2:
     priority: 20
     provider: roboflow
+    workspace: catargiuconstantin2
     project: firesmokenewdataset
     version: 1
     expected_images: 6176
@@ -26,6 +28,7 @@ sources:
   industrial:
     priority: 30
     provider: roboflow
+    workspace: firesmokehuman
     project: fire-and-smoke-industrial
     version: 10
     expected_images: 62314
@@ -35,6 +38,7 @@ sources:
   fasdd_cv:
     priority: 40
     provider: roboflow
+    workspace: pantauai
     project: fasdd_cv_fire_smoke_detection
     version: 4
     expected_images: 94600
@@ -44,6 +48,7 @@ sources:
   very_fire_smoke:
     priority: 50
     provider: roboflow
+    workspace: agostino-abbatecola-52ty4
     project: veryfiresmokedetection
     version: 2
     expected_images: 3417
@@ -53,6 +58,7 @@ sources:
   fire_detection:
     priority: 60
     provider: roboflow
+    workspace: firedetection-sserj
     project: fire_detection-uhbdr
     version: 2
     expected_images: 54883

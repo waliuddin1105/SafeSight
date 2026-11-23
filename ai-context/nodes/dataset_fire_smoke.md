@@ -29,6 +29,8 @@ context, confirms perceptual duplicate candidates with pixel similarity, quarant
 annotations and retains provenance. A balanced D-Fire replay subset limits forgetting. Uploaded
 video frames and current-model prelabels remain outside training until human review. The generated
 folder is `datasets/fire_smoke_curated`; details are in `docs/FIRE_SMOKE_CURATION.md`.
+Roboflow acquisition uses workspace-qualified export endpoints, polls asynchronous export
+generation, redacts credentials from errors, resumes partial archives and verifies ZIP integrity.
 
 ## Gotchas
 

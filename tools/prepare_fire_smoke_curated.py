@@ -18,6 +18,7 @@ import re
 import shutil
 import sys
 import tempfile
+import time
 from typing import Any, Iterable
 import zipfile
 
@@ -188,10 +189,31 @@ def audit_boxes(boxes: list[Box]) -> list[str]:
     return reasons
 
 
+def roboflow_export_endpoint(source: dict[str, Any]) -> str:
+    """Return the official SDK-compatible export endpoint without credentials."""
+    return (
+        f"https://api.roboflow.com/{source['workspace']}/{source['project']}/"
+        f"{source['version']}/yolov8"
+    )
+
+
 def roboflow_export(source: dict[str, Any], key: str) -> tuple[str, dict[str, Any]]:
-    endpoint = f"https://api.roboflow.com/dataset/{source['project']}/{source['version']}/yolov8"
-    response = requests.get(endpoint, params={"api_key": key}, timeout=60)
-    response.raise_for_status()
+    endpoint = roboflow_export_endpoint(source)
+    deadline = time.monotonic() + 30 * 60
+    while True:
+        try:
+            response = requests.get(endpoint, params={"api_key": key}, timeout=60)
+            response.raise_for_status()
+        except requests.RequestException as error:
+            status = error.response.status_code if error.response is not None else "network-error"
+            raise RuntimeError(
+                f"Roboflow export request failed ({status}) for {source['project']} v{source['version']}"
+            ) from None
+        if response.status_code != 202:
+            break
+        if time.monotonic() >= deadline:
+            raise RuntimeError(f"Roboflow export timed out for {source['project']} v{source['version']}")
+        time.sleep(5)
     if "zip" in response.headers.get("content-type", ""):
         return response.url, {"endpoint": endpoint}
     payload = response.json()
