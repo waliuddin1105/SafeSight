@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import argparse
 from collections import Counter, defaultdict
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 import hashlib
 import json
@@ -223,23 +224,81 @@ def roboflow_export(source: dict[str, Any], key: str) -> tuple[str, dict[str, An
     return link, {"endpoint": endpoint, "export": {key: value for key, value in payload.get("export", {}).items() if key != "link"}}
 
 
-def download_file(url: str, destination: Path) -> None:
+def download_segment(url: str, destination: Path, start: int, end: int, attempts: int = 5) -> int:
+    """Download one validated byte range without exposing its signed URL in errors."""
+    expected = end - start + 1
+    temporary = destination.with_suffix(destination.suffix + ".part")
+    for attempt in range(1, attempts + 1):
+        try:
+            with requests.get(
+                url,
+                headers={"Range": f"bytes={start}-{end}", "User-Agent": "SafeSight/1.0"},
+                stream=True,
+                timeout=(30, 180),
+            ) as response:
+                if response.status_code != 206:
+                    raise RuntimeError(f"range response was {response.status_code}")
+                with temporary.open("wb") as handle:
+                    for block in response.iter_content(1024 * 1024):
+                        if block:
+                            handle.write(block)
+            if temporary.stat().st_size != expected:
+                raise RuntimeError("range length mismatch")
+            temporary.replace(destination)
+            return expected
+        except (OSError, requests.RequestException, RuntimeError):
+            temporary.unlink(missing_ok=True)
+            if attempt == attempts:
+                raise RuntimeError(f"Segment download failed after {attempts} attempts: {start}-{end}") from None
+            time.sleep(attempt * 2)
+    raise AssertionError("unreachable")
+
+
+def download_file(url: str, destination: Path, workers: int = 48, segment_bytes: int = 2 * 1024 * 1024) -> None:
+    """Resume a signed download using validated parallel ranges."""
     destination.parent.mkdir(parents=True, exist_ok=True)
-    partial = destination.with_suffix(destination.suffix + ".part")
-    offset = partial.stat().st_size if partial.exists() else 0
-    headers = {"User-Agent": "SafeSight/1.0"}
-    if offset:
-        headers["Range"] = f"bytes={offset}-"
-    with requests.get(url, headers=headers, stream=True, timeout=(30, 180), allow_redirects=True) as response:
-        if offset and response.status_code != 206:
-            partial.unlink(missing_ok=True)
-            return download_file(url, destination)
-        response.raise_for_status()
-        with partial.open("ab" if offset else "wb") as handle:
-            for block in response.iter_content(CHUNK):
-                if block:
-                    handle.write(block)
-    partial.replace(destination)
+    try:
+        head = requests.head(url, timeout=60, allow_redirects=True)
+        head.raise_for_status()
+        total = int(head.headers["content-length"])
+        if head.headers.get("accept-ranges", "").casefold() != "bytes":
+            raise RuntimeError("provider does not support byte ranges")
+    except (KeyError, ValueError, requests.RequestException, RuntimeError):
+        raise RuntimeError("Unable to inspect the signed dataset archive") from None
+    parts = destination.with_suffix(destination.suffix + ".parts")
+    parts.mkdir(parents=True, exist_ok=True)
+    ranges = [(start, min(total - 1, start + segment_bytes - 1)) for start in range(0, total, segment_bytes)]
+    completed = 0
+    pending: list[tuple[int, int, Path]] = []
+    for index, (start, end) in enumerate(ranges):
+        part = parts / f"{index:06d}.part"
+        expected = end - start + 1
+        if part.is_file() and part.stat().st_size == expected:
+            completed += expected
+        else:
+            part.unlink(missing_ok=True)
+            pending.append((start, end, part))
+    print(f"  Resuming {destination.name}: {completed / 1024**2:.1f}/{total / 1024**2:.1f} MiB", flush=True)
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        futures = {pool.submit(download_segment, url, part, start, end): (start, end) for start, end, part in pending}
+        for future in as_completed(futures):
+            completed += future.result()
+            print(f"  {destination.name}: {100 * completed / total:.1f}%", flush=True)
+    assembled = destination.with_suffix(destination.suffix + ".assembling")
+    with assembled.open("wb") as output:
+        for index in range(len(ranges)):
+            with (parts / f"{index:06d}.part").open("rb") as source:
+                shutil.copyfileobj(source, output, CHUNK)
+    if assembled.stat().st_size != total:
+        raise RuntimeError(f"Assembled archive has the wrong size: {destination.name}")
+    assembled.replace(destination)
+    shutil.rmtree(parts)
+    try:
+        destination.with_suffix(destination.suffix + ".part").unlink(missing_ok=True)
+    except PermissionError:
+        # A superseded downloader may still hold the legacy file on Windows.
+        # The assembled, size-verified archive is already complete.
+        pass
 
 
 def acquire(config: dict[str, Any], selected: set[str] | None = None) -> dict[str, Any]:

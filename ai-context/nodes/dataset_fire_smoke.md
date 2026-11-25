@@ -30,7 +30,10 @@ annotations and retains provenance. A balanced D-Fire replay subset limits forge
 video frames and current-model prelabels remain outside training until human review. The generated
 folder is `datasets/fire_smoke_curated`; details are in `docs/FIRE_SMOKE_CURATION.md`.
 Roboflow acquisition uses workspace-qualified export endpoints, polls asynchronous export
-generation, redacts credentials from errors, resumes partial archives and verifies ZIP integrity.
+generation and redacts credentials from errors. Large archives are downloaded as validated,
+resumable byte-range segments, assembled only after every segment completes, and then checked
+for ZIP integrity. A legacy single-stream partial file is ignored once the assembled archive is
+complete.
 
 ## Gotchas
 
