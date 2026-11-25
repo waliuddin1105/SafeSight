@@ -57,6 +57,20 @@ def test_runtime_splits_preserve_sources_and_are_reproducible(tmp_path):
     )
 
 
+def test_runtime_splits_supply_zero_timestamps_for_still_images(tmp_path):
+    root = tmp_path / "original"
+    rows = flat_dataset(root)
+    for row in rows:
+        row.pop("start")
+        row.pop("end")
+    (root / "manifest.jsonl").write_text("".join(json.dumps(row) + "\n" for row in rows))
+
+    output = materialize_splits(root, "body_state", output_root=tmp_path / "staged")
+    staged = [json.loads(line) for line in (output / "manifest.jsonl").read_text().splitlines()]
+
+    assert all(row["start"] == 0.0 and row["end"] == 0.0 for row in staged)
+
+
 def test_staged_tampering_and_conflicting_source_groups_are_rejected(tmp_path):
     root = tmp_path / "original"
     rows = flat_dataset(root)

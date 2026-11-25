@@ -181,6 +181,11 @@ while checked export/fetch bundles remain the offline fallback. Runtime packages
 
 ADR 0007 supersedes local credentials and Compose PostgreSQL. Hosted PostgreSQL and Supabase email Auth use environment configuration. Cookie/CSRF protections and application role assignments remain; see SUPABASE.md.
 
+## Approved update: curated fire/smoke training schedule
+
+ADR 0015 specializes the fire/smoke recipe for the 268,142-image curated corpus. Its maximum
+is 50 epochs with patience 8, and its read-only input is `datasets/fire_smoke_curated`.
+
 ## Approved P1-P8 improvements
 
 Image training and frozen qualification are separate. Training reports, pinned video jobs, resilient worker ownership, typed dashboard, shared auth limits and operational diagnostics are implemented as described in IMPROVEMENTS.md. Docker/real-training limitations remain in VERIFY.md.

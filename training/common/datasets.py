@@ -140,6 +140,7 @@ def validate(root: Path, slug: str, allow_synthetic: bool = False, *, qualificat
         return result
     if not records:
         result.errors.append("Manifest is empty")
+    print(f"Dataset validation: loaded {len(records):,} manifest rows.", flush=True)
     result.synthetic = any(row.get("synthetic", False) for row in records)
     if result.synthetic and not allow_synthetic:
         result.errors.append("Synthetic data requires explicit --allow-synthetic / --smoke")
@@ -280,12 +281,15 @@ def validate(root: Path, slug: str, allow_synthetic: bool = False, *, qualificat
                         counts[split][person["label"]] += 1
         except (OSError, ValueError, KeyError, TypeError, IndexError, av.error.FFmpegError) as error:
             result.errors.append(f"Manifest row {index + 1}: {error}")
+        if (index + 1) % 5_000 == 0 or index + 1 == len(records):
+            print(f"Dataset validation: checked {index + 1:,}/{len(records):,} samples.", flush=True)
 
     for kind, mapping in (("group", group_splits), ("source", sources)):
         for identifier, partitions in mapping.items():
             if len(partitions) > 1:
                 result.errors.append(f"{kind} {identifier} leaks across {sorted(partitions)}")
     # Four 16-bit buckets retrieve every pair with Hamming distance <=3.
+    print("Dataset validation: checking cross-split near duplicates...", flush=True)
     buckets: dict[tuple[int, int], list[int]] = defaultdict(list)
     for index, (split, path, signature) in enumerate(signatures):
         candidates = set()
@@ -353,6 +357,7 @@ def validate(root: Path, slug: str, allow_synthetic: bool = False, *, qualificat
                     f"{split}: sample fraction {samples[split] / total:.2f} differs from recommended {target}"
                 )
     expected_folder = "clips" if slug == "entrance_guard" else "images"
+    print("Dataset validation: checking staged media inventory...", flush=True)
     actual = {p.relative_to(root).as_posix() for p in (root / expected_folder).rglob("*") if p.is_file()}
     if actual - listed_paths:
         result.errors.append(f"{len(actual - listed_paths)} media files are missing from manifest")
@@ -361,6 +366,7 @@ def validate(root: Path, slug: str, allow_synthetic: bool = False, *, qualificat
         for split in SPLITS
     }
     result.dataset_hash = fingerprint.hexdigest()
+    print("Dataset validation: complete.", flush=True)
     return result
 
 

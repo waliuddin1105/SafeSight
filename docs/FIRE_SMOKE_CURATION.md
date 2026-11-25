@@ -32,5 +32,8 @@ After the corpus passes validation, training on another machine uses:
 .\.venv\Scripts\python.exe training\fire_smoke\train.py --config training/fire_smoke/config.curated.yaml
 ```
 
+Both the default and curated fire/smoke recipes use this corpus. Training runs for at most
+50 epochs with early-stopping patience 8. The best validation checkpoint is retained.
+
 The preparation report describes structural and annotation-policy checks only. Model quality
 must be measured on source-separated real footage after training.

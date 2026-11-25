@@ -1,5 +1,18 @@
 # M0-M7 verification record
 
+## Curated fire/smoke training recipe (2026-11-25)
+
+- Both fire/smoke configs select `datasets/fire_smoke_curated`, 50 maximum epochs and
+  early-stopping patience 8. No trainer or optimizer was executed.
+- A direct temporary-dataset check passed for deterministic split materialization and
+  generated zero timestamps on still-image records that omit timing. Changed Python files
+  compile, release contracts pass, and the context graph is current.
+- The available Python environments do not contain pytest or Ruff, so those two development
+  gates were not rerun. The user confirmed the curated images had already been verified.
+- Pre-epoch dataset work now reports periodic progress for inventory, hashing, staging,
+  sealing and per-image validation. A direct fixture run exercises these messages without
+  running a trainer.
+
 ## 2026-11-21 multi-input testing lab
 
 - Added a separate responsive Testing Lab page with recorded-footage, browser-webcam and

@@ -38,12 +38,18 @@ def materialize_splits(
     if not manifest.is_file():
         return root  # Existing validator supplies the actionable missing-file error.
     records = jsonl(manifest)
+    print(f"Dataset split: loaded {len(records):,} manifest rows.", flush=True)
     if not records or all(row.get("split") in ("train", "val", "test") for row in records):
         return root
     if any("split" in row for row in records):
         raise ValueError("Automatic splitting requires all manifest rows to omit split")
     folder = "clips" if slug == "entrance_guard" else "images"
-    actual = {p.relative_to(root).as_posix() for p in (root / folder).rglob("*") if p.is_file()}
+    actual = set()
+    for path in (root / folder).rglob("*"):
+        if path.is_file():
+            actual.add(path.relative_to(root).as_posix())
+            if len(actual) % 25_000 == 0:
+                print(f"Dataset split: inventoried {len(actual):,} media files...", flush=True)
     listed = {row["path"] for row in records}
     if actual - listed:
         raise ValueError("Input media missing from manifest; add provenance before splitting")
@@ -76,17 +82,25 @@ def materialize_splits(
     for row in records:
         paths.update((row["path"], row["annotation"]))
     paths.update(row["video"] for row in events)
-    for name in sorted(paths):
+    total_paths = len(paths)
+    print(f"Dataset split: hashing {total_paths:,} source files...", flush=True)
+    for index, name in enumerate(sorted(paths), 1):
         path = within(root, name)
         fingerprint.update(name.encode())
         fingerprint.update(sha256(path).encode())
+        if index % 25_000 == 0 or index == total_paths:
+            print(f"Dataset split: hashed {index:,}/{total_paths:,} source files.", flush=True)
     destination = (output_root or ROOT / "artifacts/dataset-splits") / slug / fingerprint.hexdigest()
     marker = destination / "split_plan.json"
     if marker.exists():
         plan = json.loads(marker.read_text(encoding="utf-8"))
-        for name, checksum in plan["files"].items():
+        existing_files = plan["files"]
+        print(f"Dataset split: verifying {len(existing_files):,} staged files...", flush=True)
+        for index, (name, checksum) in enumerate(existing_files.items(), 1):
             if sha256(within(destination, name)) != checksum:
                 raise ValueError("Generated split was modified; restore it or use a fresh artifact directory")
+            if index % 25_000 == 0 or index == len(existing_files):
+                print(f"Dataset split: verified {index:,}/{len(existing_files):,} staged files.", flush=True)
         return destination
     if destination.exists():
         raise ValueError(f"Incomplete split staging at {destination}; remove that generated directory and retry")
@@ -104,7 +118,8 @@ def materialize_splits(
     staged = []
     folder = "clips" if slug == "entrance_guard" else "images"
     annotation_folder = "labels" if slug in YOLO_SLUGS else "annotations"
-    for row in records:
+    print(f"Dataset split: staging {len(records):,} samples...", flush=True)
+    for index, row in enumerate(records, 1):
         split = assignments[row["group_id"]]
         # Preserve nested paths; require the documented flat input roots.
         media = Path(row["path"])
@@ -115,7 +130,18 @@ def materialize_splits(
         output_annotation = f"{annotation_folder}/{split}/" + Path(*annotation.parts[1:]).as_posix()
         copy(row["path"], output_media)
         copy(row["annotation"], output_annotation)
-        staged.append({**row, "path": output_media, "annotation": output_annotation, "split": split})
+        staged.append(
+            {
+                **row,
+                "path": output_media,
+                "annotation": output_annotation,
+                "split": split,
+                "start": row.get("start", 0.0),
+                "end": row.get("end", 0.0),
+            }
+        )
+        if index % 10_000 == 0 or index == len(records):
+            print(f"Dataset split: staged {index:,}/{len(records):,} samples.", flush=True)
     (destination / "manifest.jsonl").write_text("".join(json.dumps(row) + "\n" for row in staged), encoding="utf-8")
     if slug in YOLO_SLUGS:
         (destination / "data.yaml").write_text(
@@ -144,8 +170,15 @@ def materialize_splits(
             path = destination / "events" / f"{split}.jsonl"
             path.parent.mkdir(exist_ok=True)
             path.write_text("".join(json.dumps(row) + "\n" for row in selected), encoding="utf-8")
-    files = {p.relative_to(destination).as_posix(): sha256(p) for p in destination.rglob("*") if p.is_file()}
+    staged_paths = [path for path in destination.rglob("*") if path.is_file()]
+    files = {}
+    print(f"Dataset split: sealing {len(staged_paths):,} staged files...", flush=True)
+    for index, path in enumerate(staged_paths, 1):
+        files[path.relative_to(destination).as_posix()] = sha256(path)
+        if index % 25_000 == 0 or index == len(staged_paths):
+            print(f"Dataset split: sealed {index:,}/{len(staged_paths):,} staged files.", flush=True)
     marker.write_text(
         json.dumps({"seed": seed, "ratios": ratios, "groups": assignments, "files": files}, indent=2), encoding="utf-8"
     )
+    print(f"Dataset split: ready at {destination}.", flush=True)
     return destination

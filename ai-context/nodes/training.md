@@ -10,6 +10,7 @@ links:
 - architecture
 - quality
 - adr-0013
+- adr-0015
 ---
 # Training
 
@@ -49,3 +50,9 @@ cache timestamps and the configured effective batch. The retry is accepted only 
 run metadata matches the latest successful validation report's dataset hash.
 Verified retry runs require the existing train/validation caches and bypass restaging;
 CUDA OOM cleanup releases the failed model and inter-process cache before a lower batch retry.
+
+The fire/smoke recipe is specialized for the large curated corpus: 50 maximum epochs,
+patience 8, and `datasets/fire_smoke_curated` as its read-only input. Flat still-image
+records without explicit timing receive `start=end=0.0` only in generated split staging.
+Large-corpus preparation prints row counts and periodic inventory, hashing, staging,
+sealing and validation progress before the model trainer begins emitting epoch output.

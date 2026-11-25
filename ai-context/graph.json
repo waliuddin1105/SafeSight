@@ -171,6 +171,18 @@
       "path": "decisions/0014-curated-fire-smoke-corpus.md"
     },
     {
+      "id": "adr-0015",
+      "type": "decision",
+      "status": "accepted",
+      "links": [
+        "training",
+        "fire_smoke",
+        "dataset_fire_smoke",
+        "adr-0014"
+      ],
+      "path": "decisions/0015-curated-fire-smoke-training.md"
+    },
+    {
       "id": "index",
       "type": "index",
       "status": "implemented",
@@ -337,7 +349,8 @@
       "links": [
         "datasets",
         "fire_smoke",
-        "adr-0014"
+        "adr-0014",
+        "adr-0015"
       ],
       "path": "nodes/dataset_fire_smoke.md"
     },
@@ -451,7 +464,8 @@
         "architecture",
         "quality",
         "dataset_fire_smoke",
-        "adr-0011"
+        "adr-0011",
+        "adr-0015"
       ],
       "path": "nodes/fire_smoke.md"
     },
@@ -576,7 +590,8 @@
         "adr-0005",
         "architecture",
         "quality",
-        "adr-0013"
+        "adr-0013",
+        "adr-0015"
       ],
       "path": "nodes/training.md"
     },
@@ -844,6 +859,22 @@
     {
       "from": "adr-0014",
       "to": "quality"
+    },
+    {
+      "from": "adr-0015",
+      "to": "training"
+    },
+    {
+      "from": "adr-0015",
+      "to": "fire_smoke"
+    },
+    {
+      "from": "adr-0015",
+      "to": "dataset_fire_smoke"
+    },
+    {
+      "from": "adr-0015",
+      "to": "adr-0014"
     },
     {
       "from": "index",
@@ -1114,6 +1145,10 @@
       "to": "adr-0014"
     },
     {
+      "from": "dataset_fire_smoke",
+      "to": "adr-0015"
+    },
+    {
       "from": "dataset_phone_usage",
       "to": "datasets"
     },
@@ -1248,6 +1283,10 @@
     {
       "from": "fire_smoke",
       "to": "adr-0011"
+    },
+    {
+      "from": "fire_smoke",
+      "to": "adr-0015"
     },
     {
       "from": "fusion_calibration",
@@ -1396,6 +1435,10 @@
     {
       "from": "training",
       "to": "adr-0013"
+    },
+    {
+      "from": "training",
+      "to": "adr-0015"
     },
     {
       "from": "verification",

@@ -535,6 +535,7 @@ def main(slug: str) -> int:
     seed_everything(config["seed"])
     from training.common.splitting import materialize_splits
 
+    print(f"Preparing {slug} dataset from {resolve_path(config['dataset'])}...", flush=True)
     dataset = materialize_splits(
         resolve_path(config["dataset"]),
         slug,
@@ -558,6 +559,7 @@ def main(slug: str) -> int:
             synthetic=validated["synthetic"],
         )
     else:
+        print(f"Validating prepared dataset at {dataset}...", flush=True)
         result = validate(dataset, slug, args.smoke, qualification=False)
         result.write(ROOT / "artifacts/reports/validation" / slug)
     if not result.valid:

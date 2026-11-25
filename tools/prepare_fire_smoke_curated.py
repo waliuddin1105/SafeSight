@@ -394,6 +394,7 @@ def stage_public_sources(config: dict[str, Any], stage: Path) -> tuple[list[dict
                     record.update({
                         "sample_id": Path(path).stem, "path": path, "annotation": annotation,
                         "source_id": f"{source_name}:{image.stem}", "group_id": scene_group(source_name, image.stem),
+                        "start": 0.0, "end": 0.0,
                         "publisher": source_name, "license": source["license"], "ignored_other_boxes": ignored,
                         "image_sha256": image_hash, "perceptual_hash": f"{signature:016x}", "label_value": label_value,
                     })
@@ -447,6 +448,7 @@ def add_dfire_replay(config: dict[str, Any], stage: Path, records: list[dict[str
             record = {
                 "sample_id": Path(path).stem, "path": path, "annotation": annotation,
                 "source_id": row["source_id"], "group_id": row["group_id"], "publisher": "dfire_replay",
+                "start": 0.0, "end": 0.0,
                 "publisher_sample_id": row.get("publisher_sample_id", image.stem), "license": row["license"],
                 "image_sha256": image_hash,
             }
