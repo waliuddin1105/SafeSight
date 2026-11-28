@@ -7,9 +7,9 @@
     "smoke",
     "fire"
   ],
-  "artifact": "fire_smoke/versions/imported-5fa16ec75c6b/best.pt",
+  "artifact": "fire_smoke/versions/imported-dfire-v1/best.pt",
   "sha256": "5fa16ec75c6b5559cceff7f5672c755faccecaf3ed5f53fe6c40839728ec8120",
-  "run_id": "imported-5fa16ec75c6b",
+  "run_id": "imported-dfire-v1",
   "input_size": 640,
   "postprocessing": {
     "nms_iou": 0.45,

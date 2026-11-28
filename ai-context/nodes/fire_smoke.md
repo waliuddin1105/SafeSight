@@ -15,7 +15,8 @@ fire_smoke is independently trainable and replaceable. Its taxonomy and collecti
 
 The default recipe trains the curated corpus at `datasets/fire_smoke_curated` for at most 50 epochs with patience 8. Qualification remains a separate real-video gate.
 
-The imported industrial candidate `imported-industrial-v2` is available under
+The imported D-Fire candidate `imported-dfire-v1` and industrial candidate
+`imported-industrial-v2` are available under
 `models/fire_smoke/versions/` for explicit evaluation in the testing workspace. Its checkpoint
-uses class order fire, smoke; the model card preserves this order. It is unqualified and does
-not replace the active fire_smoke model.
+uses class order fire, smoke; the v2 model card preserves this order. V2 is unqualified and does
+not replace the active fire_smoke model. V1 remains the active version.
