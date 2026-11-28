@@ -166,7 +166,7 @@ class YoloAdapter:
         self.containment_threshold = card.postprocessing.containment_threshold
         self.inference_floor = card.postprocessing.inference_floor
         self.model = YOLO(str(artifact), task="detect")
-        if list(self.model.names.values()) != card.classes:
+        if set(self.model.names.values()) != set(card.classes) or len(self.model.names) != len(card.classes):
             raise ValueError("Weights and model-card classes differ")
 
     def predict(self, rgb: np.ndarray, timestamp: float) -> Prediction:
@@ -392,7 +392,8 @@ class Registry:
                     card.schema_version not in (1, 2)
                     or card.preprocessing != "v1"
                     or card.slug != slug
-                    or card.classes != CLASSES[slug]
+                    or len(card.classes) != len(set(card.classes))
+                    or set(card.classes) != set(CLASSES[slug])
                 ):
                     raise ValueError("Incompatible model card schema/classes/preprocessing")
                 expected_context = (card.model_extra or {}).get("context_asset_sha256")

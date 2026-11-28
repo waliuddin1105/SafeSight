@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "slug": "fire_smoke",
+  "loader": "ultralytics",
+  "architecture": "yolo11m",
+  "classes": ["fire", "smoke"],
+  "artifact": "fire_smoke/versions/imported-industrial-v2/best.pt",
+  "sha256": "587971f0826448c2a6d56143d0312929d97b431a7b5a5dfebb071e73d2f7f693",
+  "run_id": "imported-industrial-v2",
+  "input_size": 640,
+  "postprocessing": {
+    "nms_iou": 0.45,
+    "containment_threshold": 0.8,
+    "inference_floor": 0.05,
+    "display_floor": 0.1
+  },
+  "thresholds": {},
+  "quality": {
+    "status": "FAIL",
+    "reasons": [
+      "Imported checkpoint has not been qualified on SafeSight validation and untouched test recordings.",
+      "Alert thresholds have not been calibrated to the configured target precision."
+    ]
+  },
+  "synthetic": false,
+  "preprocessing": "v1",
+  "metrics": {},
+  "dataset": {
+    "fingerprint": null,
+    "provenance": "User-provided fire_smoke_industrial_model checkpoint; training dataset provenance was not supplied."
+  },
+  "created_at": "2026-11-28T19:10:00+05:00",
+  "known_limitations": [
+    "Checkpoint class order is fire, smoke and is preserved by this model card.",
+    "Accuracy, alert precision, alert recall, and operating thresholds are unverified."
+  ]
+}

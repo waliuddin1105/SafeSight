@@ -21,6 +21,10 @@ See the typed contracts and API routes for the concrete boundary. Configuration 
 
 Synthetic checks establish software execution only. Follow docs/VERIFY.md for current verification limits.
 
+YOLO model cards may preserve a checkpoint's class order when it is a permutation of the
+use-case taxonomy; inference maps class IDs through that card order. Unknown, missing, or
+duplicate class names remain incompatible.
+
 Immutable versioned cards use normal Git and versioned weights use Git LFS so clones share
 the same relative artifact layout. `tools/share_model.py export/fetch` remains the verified
 offline/shared-drive fallback. Imported versions remain inactive; see docs/MODEL_SHARING.md.
