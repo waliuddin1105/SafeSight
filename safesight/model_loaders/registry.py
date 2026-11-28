@@ -388,12 +388,20 @@ class Registry:
                     or qualification.model_card_sha256 != contract_sha256(card)
                 ):
                     raise ValueError("Qualification does not match the selected model card")
+                expected_classes = set(CLASSES[slug])
+                card_classes = set(card.classes)
+                classes_compatible = (
+                    bool(card_classes)
+                    and card_classes.issubset(expected_classes)
+                    if slug == "cigarette_smoking"
+                    else card_classes == expected_classes
+                )
                 if (
                     card.schema_version not in (1, 2)
                     or card.preprocessing != "v1"
                     or card.slug != slug
                     or len(card.classes) != len(set(card.classes))
-                    or set(card.classes) != set(CLASSES[slug])
+                    or not classes_compatible
                 ):
                     raise ValueError("Incompatible model card schema/classes/preprocessing")
                 expected_context = (card.model_extra or {}).get("context_asset_sha256")

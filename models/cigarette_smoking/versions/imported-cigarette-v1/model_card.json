@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "slug": "cigarette_smoking",
+  "loader": "ultralytics",
+  "architecture": "yolo11m",
+  "classes": ["cigarette"],
+  "artifact": "cigarette_smoking/versions/imported-cigarette-v1/best.pt",
+  "sha256": "3f3ea54995cba4bbbd82960dce5c6be2f16cf8fe024c2a5892800a0d3f44b9c1",
+  "run_id": "imported-cigarette-v1",
+  "input_size": 640,
+  "postprocessing": {
+    "nms_iou": 0.45,
+    "containment_threshold": 0.8,
+    "inference_floor": 0.05,
+    "display_floor": 0.1
+  },
+  "thresholds": {},
+  "quality": {
+    "status": "FAIL",
+    "reasons": [
+      "Imported checkpoint has not been qualified on SafeSight validation and untouched test recordings.",
+      "The one-class checkpoint does not provide person, lighter, or smoke cues required for complete smoking analysis.",
+      "Alert thresholds have not been calibrated to the configured target precision."
+    ]
+  },
+  "synthetic": false,
+  "preprocessing": "v1",
+  "metrics": {},
+  "dataset": {
+    "fingerprint": null,
+    "provenance": "User-provided cigarette_detection checkpoint; training dataset provenance was not supplied."
+  },
+  "created_at": "2026-11-28T19:30:00+05:00",
+  "known_limitations": [
+    "This candidate detects visible cigarettes only; it cannot detect people, lighters, or smoke.",
+    "Hidden-cigarette smoking inference is unavailable with this candidate alone.",
+    "Accuracy, alert precision, alert recall, and operating thresholds are unverified."
+  ]
+}
